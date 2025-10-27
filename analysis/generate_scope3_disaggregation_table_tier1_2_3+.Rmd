@@ -470,9 +470,9 @@ sector_classification <- model$Industries %>%
     by = "Code"
   ) %>%
   # Separate Category into Code and Name
-  tidyr::separate(Category, into = c("Category Code", "Category Name"), sep = ": ", extra = "merge", remove = TRUE) %>%
+  tidyr::separate(Category, into = c("Category Code", "Category Name"), sep = ": ", extra = "merge", fill = "right", remove = TRUE) %>%
   # Separate Subcategory into Code and Name
-  tidyr::separate(Subcategory, into = c("Subcategory Code", "Subcategory Name"), sep = ": ", extra = "merge", remove = TRUE) %>%
+  tidyr::separate(Subcategory, into = c("Subcategory Code", "Subcategory Name"), sep = ": ", extra = "merge", fill = "right", remove = TRUE) %>%
   mutate(
     # Use a single regex to remove multiple possible prefixes
     Description = stringr::str_remove(Description, "^(BEA Code & Name is '?\\w+:.*?'?\\.\\s*)")

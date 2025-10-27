@@ -24,7 +24,8 @@
 
     <section class="controls">
       <label for="commoditySelect">Commodity to disaggregate:</label>
-      <select id="commoditySelect"></select>
+  <input id="commoditySearch" type="search" placeholder="Type to filter commodities…" aria-label="Search commodities" />
+  <select id="commoditySelect"></select>
 
       <label for="secondRingField">Disaggregate by:</label>
       <select id="secondRingField">
@@ -36,8 +37,8 @@
         <option value="code">Sector code</option>
       </select>
 
-      <label for="minPct">Minimum contribution to display (%)</label>
-      <input id="minPct" type="number" min="0" max="5" step="0.01" value="0.10" />
+  <label for="minPct">Minimum contribution to display (%)</label>
+  <input id="minPct" type="number" min="0" max="5" step="0.01" value="0.25" />
       <button id="redrawBtn">Redraw</button>
     </section>
 

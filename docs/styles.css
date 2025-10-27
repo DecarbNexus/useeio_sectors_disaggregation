@@ -34,3 +34,5 @@ button{background:var(--btn);color:var(--btn-text);border-color:var(--border)}
 button:hover{filter:brightness(1.1)}
 code{color:var(--accent)}
 footer{max-width:1100px;margin:1rem auto 0; text-align:center; color:var(--muted)}
+/* Lightweight loading indicator */
+.loading{color:var(--muted); text-align:center; padding:.5rem 0}

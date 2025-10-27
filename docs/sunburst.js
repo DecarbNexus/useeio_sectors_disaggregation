@@ -56,6 +56,8 @@ async function loadCSV() {
   throw new Error("Failed to load CSV from any candidate URL: " + lastErr);
 }
 
+// Per-commodity JSONs and slim CSV removed; we load the full CSV once and filter client-side.
+
 async function tryLoadClassification() {
   // Attempt Release first, then raw main, then repo-relative path
   const candidates = [
@@ -266,25 +268,105 @@ function renderSunburst(rootData, centerLabel, minShare) {
 }
 
 async function init() {
-  const rows = await loadCSV();
-  const cols = getColumnsMap(rows.columns);
   const classData = await tryLoadClassification();
+  const allRows = await loadCSV();
+  const cols = getColumnsMap(allRows.columns);
 
-  // Collect unique commodities and map to commodity names via classification
-  const uniqueCodes = Array.from(new Set(rows.map((d) => d[cols.commodity])));
   const toName = (code) => {
     const rec = classData.map.get(code);
     return (rec && rec.commodity_name) ? rec.commodity_name : code;
   };
-  const commodities = uniqueCodes.map((code) => ({ code, name: toName(code) }));
+
+  const uniqueCodes = Array.from(new Set(allRows.map((d) => d[cols.commodity])));
+  let commodities = uniqueCodes.map((code) => ({ code, name: toName(code) }));
   commodities.sort((a, b) => d3.ascending(a.name, b.name));
 
   const select = document.getElementById("commoditySelect");
+  const search = document.getElementById("commoditySearch");
   for (const c of commodities) {
     const opt = document.createElement("option");
     opt.value = c.code;
-    opt.textContent = c.name;
+    opt.textContent = c.name; // display names only per request
+    opt.dataset.code = c.code;
+    opt.dataset.name = c.name;
     select.appendChild(opt);
+  }
+
+  // Fuzzy search across name and code; prefers code exact/startsWith, then name
+  const norm = (s) => (s || "").toLowerCase();
+  const isSubsequence = (q, s) => {
+    let i = 0;
+    for (let c of s) if (c === q[i]) i++;
+    return i === q.length;
+  };
+  const scoreMatch = (q, name, code) => {
+    if (!q) return 0;
+    // exact code match highest
+    if (code === q) return 100;
+    // code startswith
+    if (code.startsWith(q)) return 90;
+    // name startswith token
+    if (name.startsWith(q)) return 80;
+    // substring matches
+    let sc = 0;
+    if (code.includes(q)) sc = Math.max(sc, 75);
+    if (name.includes(q)) sc = Math.max(sc, 70);
+    // tokenized contains (all tokens present somewhere)
+    const tokens = q.split(/\s+/).filter(Boolean);
+    if (tokens.length > 1) {
+      const allIn = tokens.every(t => name.includes(t) || code.includes(t));
+      if (allIn) sc = Math.max(sc, 65);
+    }
+    // subsequence (e.g., acm -> Agricultural Chemical Manufacturing)
+    if (isSubsequence(q, name.replace(/\s+/g, ''))) sc = Math.max(sc, 55);
+    return sc;
+  };
+
+  // Debounce redraw to avoid excessive renders while typing
+  let searchTimer = null;
+  const triggerRedraw = () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => select.dispatchEvent(new Event('change')), 120);
+  };
+
+  if (search) {
+    search.addEventListener('input', (e) => {
+      const qRaw = (e.target.value || '').trim();
+      const q = norm(qRaw);
+      let bestIndex = -1;
+      let bestScore = -1;
+      for (let i = 0; i < select.options.length; i++) {
+        const opt = select.options[i];
+        const nameL = norm(opt.dataset.name || opt.textContent || '');
+        const codeL = norm(opt.dataset.code || opt.value || '');
+        const sc = q ? scoreMatch(q, nameL, codeL) : 1; // 1 means visible when q is empty
+        const show = sc > 0;
+        opt.hidden = !show;
+        if (show && sc > bestScore) {
+          bestScore = sc;
+          bestIndex = i;
+        }
+      }
+      if (q && bestIndex >= 0) {
+        select.selectedIndex = bestIndex;
+        triggerRedraw();
+      }
+      if (!q) {
+        // show all and do not change current selection
+        triggerRedraw();
+      }
+    });
+
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        search.value = '';
+        search.dispatchEvent(new Event('input'));
+        select.focus();
+      }
+      if (e.key === 'Enter') {
+        select.focus();
+      }
+    });
   }
 
   const secondSel = document.getElementById("secondRingField");
@@ -298,9 +380,10 @@ async function init() {
 
   function redraw() {
     const chosen = select.value;
-    const filtered = rows.filter((d) => d[cols.commodity] === chosen);
+    setLoading(true);
+    const rows = allRows.filter((d) => d[cols.commodity] === chosen);
     const second = secondSel.value;
-    const tree = buildHierarchy(filtered, cols, classData.map, second);
+    const tree = buildHierarchy(rows, cols, classData.map, second);
     const label = `Disaggregated ${toName(chosen)} emissions`;
     const minPct = Math.max(0, (+document.getElementById("minPct").value || 0) / 100);
     renderSunburst(tree, label, minPct);
@@ -313,6 +396,7 @@ async function init() {
 
     // Render legend
     renderLegend();
+    setLoading(false);
   }
 
   document.getElementById("redrawBtn").addEventListener("click", redraw);
@@ -342,4 +426,16 @@ function renderLegend(){
   const sel = container.selectAll('div.item').data(items).join('div').attr('class','item');
   sel.append('span').attr('class','swatch').style('background-color', d=>d.color);
   sel.append('span').text(d=>d.label);
+}
+
+function setLoading(isLoading){
+  const chart = d3.select('#chart');
+  let el = chart.select('.loading');
+  if (isLoading){
+    if (el.empty()){
+      el = chart.append('div').attr('class','loading').text('Loading…');
+    }
+  } else {
+    el.remove();
+  }
 }
