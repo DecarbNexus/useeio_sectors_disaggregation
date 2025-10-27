@@ -43,7 +43,8 @@ if (!ok) stop("Failed to extract R code from ", rmd, ". Ensure knitr is installe
 
 cat("Running analysis code...\n")
 tryCatch({
-	sys.source(tmp, envir = .GlobalEnv, keep.source = TRUE, echo = TRUE, max.deparse.length = Inf)
+	# Use source() (not sys.source) so echo and max.deparse.length are supported across R versions
+	source(tmp, local = .GlobalEnv, echo = TRUE, max.deparse.length = Inf, keep.source = TRUE, chdir = TRUE)
 	cat("\nAnalysis complete. Excel/CSVs are written to outputs/.\n")
 }, error = function(e){
 	message("\nERROR while running analysis: ", conditionMessage(e))
