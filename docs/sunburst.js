@@ -290,17 +290,30 @@ async function init() {
   const uniqueCodes = Array.from(new Set(allRows.map((d) => d[cols.commodity])));
   let commodities = uniqueCodes.map((code) => ({ code, name: toName(code) }));
   commodities.sort((a, b) => d3.ascending(a.name, b.name));
+  const allCommodities = commodities.slice();
 
   const select = document.getElementById("commoditySelect");
   const search = document.getElementById("commoditySearch");
-  for (const c of commodities) {
-    const opt = document.createElement("option");
-    opt.value = c.code;
-    opt.textContent = c.name; // display names only per request
-    opt.dataset.code = c.code;
-    opt.dataset.name = c.name;
-    select.appendChild(opt);
+  function populateSelect(items, keepValue) {
+    const prev = keepValue || select.value;
+    while (select.firstChild) select.removeChild(select.firstChild);
+    for (const c of items) {
+      const opt = document.createElement("option");
+      opt.value = c.code;
+      opt.textContent = c.name; // display names only per request
+      opt.dataset.code = c.code;
+      opt.dataset.name = c.name;
+      select.appendChild(opt);
+    }
+    // Try to keep previous value if still present
+    if (prev && items.some(it => it.code === prev)) {
+      select.value = prev;
+    } else if (items.length > 0) {
+      select.selectedIndex = 0;
+    }
   }
+
+  populateSelect(allCommodities);
 
   // Fuzzy search across name and code; prefers code exact/startsWith, then name
   const norm = (s) => (s || "").toLowerCase();
@@ -343,28 +356,23 @@ async function init() {
     search.addEventListener('input', (e) => {
       const qRaw = (e.target.value || '').trim();
       const q = norm(qRaw);
-      let bestIndex = -1;
-      let bestScore = -1;
-      for (let i = 0; i < select.options.length; i++) {
-        const opt = select.options[i];
-        const nameL = norm(opt.dataset.name || opt.textContent || '');
-        const codeL = norm(opt.dataset.code || opt.value || '');
-        const sc = q ? scoreMatch(q, nameL, codeL) : 1; // 1 means visible when q is empty
-        const show = sc > 0;
-        opt.hidden = !show;
-        if (show && sc > bestScore) {
-          bestScore = sc;
-          bestIndex = i;
-        }
-      }
-      if (q && bestIndex >= 0) {
-        select.selectedIndex = bestIndex;
-        triggerRedraw();
-      }
       if (!q) {
-        // show all and do not change current selection
+        populateSelect(allCommodities, /*keepValue*/select.value);
         triggerRedraw();
+        return;
       }
+      // Score and filter against full list, not current select options
+      const scored = allCommodities.map(c => {
+        const nameL = norm(c.name);
+        const codeL = norm(c.code);
+        return { c, sc: scoreMatch(q, nameL, codeL) };
+      }).filter(x => x.sc > 0);
+
+      // Sort by score desc then name asc for stable UX
+      scored.sort((a, b) => (b.sc - a.sc) || d3.ascending(a.c.name, b.c.name));
+      const matches = scored.map(x => x.c);
+      populateSelect(matches);
+      triggerRedraw();
     });
 
     search.addEventListener('keydown', (e) => {
