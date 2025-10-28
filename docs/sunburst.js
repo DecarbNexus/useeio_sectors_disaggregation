@@ -357,21 +357,38 @@ async function init() {
       const qRaw = (e.target.value || '').trim();
       const q = norm(qRaw);
       if (!q) {
+        // Reset to full list when query is empty, keep current selection if possible
         populateSelect(allCommodities, /*keepValue*/select.value);
         triggerRedraw();
         return;
       }
-      // Score and filter against full list, not current select options
-      const scored = allCommodities.map(c => {
+
+      // STRICT filter: only include commodities where name or code contains the query substring
+      const contains = (c) => {
         const nameL = norm(c.name);
         const codeL = norm(c.code);
-        return { c, sc: scoreMatch(q, nameL, codeL) };
-      }).filter(x => x.sc > 0);
+        return nameL.includes(q) || codeL.includes(q);
+      };
+      const filtered = allCommodities.filter(contains);
 
-      // Sort by score desc then name asc for stable UX
-      scored.sort((a, b) => (b.sc - a.sc) || d3.ascending(a.c.name, b.c.name));
-      const matches = scored.map(x => x.c);
-      populateSelect(matches);
+      // Order: code startsWith > name startsWith > name contains > code contains, then name ASC
+      const rank = (c) => {
+        const nameL = norm(c.name);
+        const codeL = norm(c.code);
+        if (codeL.startsWith(q)) return 0;
+        if (nameL.startsWith(q)) return 1;
+        if (nameL.includes(q)) return 2;
+        if (codeL.includes(q)) return 3;
+        return 4;
+      };
+
+      filtered.sort((a, b) => {
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return d3.ascending(a.name, b.name);
+      });
+
+      populateSelect(filtered);
       triggerRedraw();
     });
 
