@@ -25,3 +25,6 @@ Thumbs.db.Rproj.user
 # Outputs - generated artifacts (kept out of main; served via Releases)
 outputs/*
 !outputs/.gitkeep
+ 
+# Local model spec downloaded on build (exclude from commits)
+spec_files/USEEIOv2.0.1-411-GHG.yml

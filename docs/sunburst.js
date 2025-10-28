@@ -14,12 +14,11 @@ const CLASS_FILENAME = "sector_classification.csv";
 const RELEASE_CSV_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${DATA_FILENAME}`;
 const RELEASE_CLASS_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${CLASS_FILENAME}`;
 
-const RAW_CSV_URL =
-  "https://raw.githubusercontent.com/damienlieber-dnexus/useeio_sectors_disaggregation/main/outputs/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv";
+// Raw file at the tagged version (preferred over main)
+const RAW_CSV_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${TAG}/outputs/${DATA_FILENAME}`;
 
 // Optional: sector classification CSV exported from the Excel tab. If missing, second ring defaults to Sector code.
-const CLASS_CSV_URL =
-  "https://raw.githubusercontent.com/damienlieber-dnexus/useeio_sectors_disaggregation/main/outputs/sector_classification.csv";
+const CLASS_CSV_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${TAG}/outputs/${CLASS_FILENAME}`;
 
 // dynamic sizing computed at render time
 let WIDTH = 700;
@@ -131,6 +130,17 @@ function getColumnsMap(columns) {
   };
 }
 
+function normalizeTier(val){
+  if (!val) return val;
+  const v = String(val).toLowerCase();
+  if (v.includes("tier 1")) return "Tier 1";
+  if (v.includes("tier 2")) return "Tier 2";
+  if (v.includes("tier 3")) return "Tier 3+";
+  if (v.includes("3+")) return "Tier 3+";
+  // Fallback: capitalize first letter of 'tier'
+  return val;
+}
+
 function buildHierarchy(rows, cols, sectorLookup, secondRingField) {
   // Helper: choose second-ring grouping label from code and lookup
   const getGroup = (code) => {
@@ -143,7 +153,7 @@ function buildHierarchy(rows, cols, sectorLookup, secondRingField) {
   const byKey = d3.rollup(
     rows,
     (v) => d3.sum(v, (d) => +d[cols.rel]),
-    (d) => d[cols.tier],
+    (d) => normalizeTier(d[cols.tier]),
     (d) => getGroup(d[cols.sectorCode]),
     (d) => d[cols.scope]
   );

@@ -110,7 +110,7 @@ Additional reading and context:
 
 3) Scope 1/2 mapping differences vs corporate GHG accounting
   - Leased assets: Corporate inventories often record the lessee’s (tenant’s) Scope 1 and 2. Here, these emissions are attributed to the asset’s sector (the lessor). Planned: an option to reassign them to purchasers’ Scope 1/2.
-  - Electricity Scope 2: We currently include direct emissions across the electricity sector (generation, transmission, distribution), not only those attributable to end‑user consumption. This can make Scope 2 a few percent higher than corporate methods. Planned: options to isolate generation‑only emissions, treat T&D separately, and apply a configurable T&D loss factor.
+  - Electricity Scope 2: We currently include all direct emissions from the electricity sector (generation + transmission &distribution). This can make Scope 2 ~1% higher than corporate methods. Planned: options to isolate generation‑only emissions and treat T&D separately.
 
 ## Beginner setup: getting R running (no prior coding experience)
 
