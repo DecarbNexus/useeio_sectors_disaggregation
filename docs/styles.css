@@ -19,7 +19,8 @@ header{max-width:1100px;margin:1rem auto}
 header h1{color:var(--accent);font-weight:700;margin:.5rem 0}
 .note a, a{color:var(--accent);text-decoration:underline}
 .note a:hover, a:hover{filter:brightness(1.1)}
-.controls{max-width:1100px;margin:0.5rem auto;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.controls{max-width:1100px;margin:0.5rem auto;display:flex;flex-direction:column;gap:.5rem}
+.control-row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
 .figure-meta{max-width:1100px;margin:0.5rem auto}
 .figure-title{color:var(--accent);font-size:1.05rem;font-weight:700;margin:0.25rem 0 0.5rem}
 .legend{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.5rem;color:var(--muted)}

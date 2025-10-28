@@ -18,28 +18,34 @@
         <a href="https://github.com/damienlieber-dnexus/useeio_sectors_disaggregation/releases/tag/v1.0" target="_blank" rel="noopener">v1.0 Release assets</a>.
       </p>
       <p class="note">
-        Tip: This loads a CSV (~40MB) directly from GitHub. First load can take a few seconds.
+        Tip: This loads a CSV (~45MB) directly from GitHub. First load can take a few seconds.
       </p>
     </header>
 
     <section class="controls">
-      <label for="commoditySelect">Commodity to disaggregate:</label>
-  <input id="commoditySearch" type="search" placeholder="Type to filter commodities…" aria-label="Search commodities" />
-  <select id="commoditySelect"></select>
+      <div class="control-row">
+        <label for="commoditySelect">Commodity to disaggregate:</label>
+        <input id="commoditySearch" type="search" placeholder="Type to filter commodities…" aria-label="Search commodities" />
+        <select id="commoditySelect"></select>
+      </div>
 
-      <label for="secondRingField">Disaggregate by:</label>
-      <select id="secondRingField">
-        <option value="sector_name" selected>Sector name</option>
-        <option value="commodity_name">Commodity name</option>
-        <option value="category_name">Category Name</option>
-        <option value="subcategory_name">Subcategory Name</option>
-        <option value="subcategory_code">Subcategory Code</option>
-        <option value="code">Sector code</option>
-      </select>
+      <div class="control-row">
+        <label for="secondRingField">Disaggregate by:</label>
+        <select id="secondRingField">
+          <option value="sector_name" selected>Sector name</option>
+          <option value="commodity_name">Commodity name</option>
+          <option value="category_name">Category Name</option>
+          <option value="subcategory_name">Subcategory Name</option>
+          <option value="subcategory_code">Subcategory Code</option>
+          <option value="code">Sector code</option>
+        </select>
+      </div>
 
-  <label for="minPct">Minimum contribution to display (%)</label>
-  <input id="minPct" type="number" min="0" max="5" step="0.01" value="0.25" />
-      <button id="redrawBtn">Redraw</button>
+      <div class="control-row">
+        <label for="minPct">Minimum contribution to display (%)</label>
+        <input id="minPct" type="number" min="0" max="5" step="0.01" value="0.25" />
+        <button id="redrawBtn">Redraw</button>
+      </div>
     </section>
 
     <section class="figure-meta">

@@ -133,11 +133,11 @@ function getColumnsMap(columns) {
 function normalizeTier(val){
   if (!val) return val;
   const v = String(val).toLowerCase();
-  if (v.includes("tier 1")) return "Tier 1";
-  if (v.includes("tier 2")) return "Tier 2";
-  if (v.includes("tier 3")) return "Tier 3+";
-  if (v.includes("3+")) return "Tier 3+";
-  // Fallback: capitalize first letter of 'tier'
+  if (v.includes("tier 1")) return "Economic tier 1";
+  if (v.includes("tier 2")) return "Economic tier 2";
+  if (v.includes("tier 3")) return "Economic tier 3+";
+  if (v.includes("3+")) return "Economic tier 3+";
+  // Fallback: return the original value
   return val;
 }
 
@@ -173,7 +173,7 @@ function buildHierarchy(rows, cols, sectorLookup, secondRingField) {
 
 function renderSunburst(rootData, centerLabel, minShare) {
   const color = d3.scaleOrdinal()
-    .domain(["Tier 1", "Tier 2", "Tier 3+"])
+    .domain(["Economic tier 1", "Economic tier 2", "Economic tier 3+"])
     .range(["#0099CC", "#9C27B0", "#20576E"]);
 
   // compute container size
@@ -189,9 +189,9 @@ function renderSunburst(rootData, centerLabel, minShare) {
     .sort((a, b) => {
       // sort only among siblings
       if (a.parent && b.parent && a.parent === b.parent) {
-        // Depth 1 (Tier ring): fixed order Tier 1, Tier 2, Tier 3+
+        // Depth 1 (Tier ring): fixed order Economic tier 1, 2, 3+
         if (a.depth === 1) {
-          const order = new Map([["Tier 1",0],["Tier 2",1],["Tier 3+",2]]);
+          const order = new Map([["Economic tier 1",0],["Economic tier 2",1],["Economic tier 3+",2]]);
           return d3.ascending(order.get(a.data.name) ?? 99, order.get(b.data.name) ?? 99);
         }
         // Depth 2 (second ring): by descending contribution
@@ -394,13 +394,13 @@ async function init() {
     const rows = allRows.filter((d) => d[cols.commodity] === chosen);
     const second = secondSel.value;
     const tree = buildHierarchy(rows, cols, classData.map, second);
-    const label = `Disaggregated ${toName(chosen)} emissions`;
+  const label = `Disaggregated ${toName(chosen)} emissions`;
     const minPct = Math.max(0, (+document.getElementById("minPct").value || 0) / 100);
     renderSunburst(tree, label, minPct);
 
     // Update figure title
     const secondLabel = secondSel.options[secondSel.selectedIndex].textContent;
-    const title = `${toName(chosen)} disaggregated by Tier, ${secondLabel}, and scope (% of total supply chain emissions without margins)`;
+  const title = `${toName(chosen)} disaggregated by Economic tier, ${secondLabel}, and scope (% of total supply chain emissions without margins)`;
     const titleEl = document.getElementById("figureTitle");
     if (titleEl) titleEl.textContent = title;
 
@@ -429,9 +429,9 @@ function renderLegend(){
   if (container.empty()) return;
   container.selectAll('*').remove();
   const items = [
-    {label:'Tier 1', color:'#0099CC'},
-    {label:'Tier 2', color:'#9C27B0'},
-    {label:'Tier 3+', color:'#20576E'},
+    {label:'Economic tier 1', color:'#0099CC'},
+    {label:'Economic tier 2', color:'#9C27B0'},
+    {label:'Economic tier 3+', color:'#20576E'},
   ];
   const sel = container.selectAll('div.item').data(items).join('div').attr('class','item');
   sel.append('span').attr('class','swatch').style('background-color', d=>d.color);
