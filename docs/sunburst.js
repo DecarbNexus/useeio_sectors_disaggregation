@@ -4,7 +4,7 @@
 // - Builds hierarchy: Tier -> SectorGroup (selectable) -> Scope with value = sum of Relative_Contribution
 
 // Repo / Release configuration
-const OWNER = "damienlieber-dnexus";
+const OWNER = "DecarbNexus";
 const REPO = "useeio_sectors_disaggregation";
 const TAG = "v1.0";
 const DATA_FILENAME = "SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv";

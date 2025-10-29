@@ -31,7 +31,7 @@ jobs:
       - name: Fetch release assets into site bundle
         shell: bash
         env:
-          OWNER: damienlieber-dnexus
+          OWNER: DecarbNexus
           REPO: useeio_sectors_disaggregation
           TAG: v1.0
           DATA_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv

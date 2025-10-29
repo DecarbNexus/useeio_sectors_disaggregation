@@ -11,7 +11,7 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Interactive visual
 
-- Try the interactive sunburst built from the CSV in this repo: https://damienlieber-dnexus.github.io/useeio_sectors_disaggregation/
+- Try the interactive sunburst built from the CSV in this repo: https://open.decarbnexus.com/
 - It lets you pick a commodity and explores Scope (1/2) → Tier (1/2/3+) → Sector codes as a sunburst using Relative_Contribution values.
 
 ### Data tables
@@ -164,7 +164,7 @@ Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
 
 This project focuses on disaggregating Scope 3 emissions by USEEIO sectors (and tiers). You’ll soon be able to combine it with a companion workflow that disaggregates each sector’s emissions into their underlying greenhouse gas sources:
 
-- Upcoming repository: https://github.com/damienlieber-dnexus/useeio_ghg_sources_disaggregation (target publication by Thanksgiving 2025)
+- Upcoming repository: https://github.com/DecarbNexus/useeio_ghg_sources_disaggregation (target publication by Thanksgiving 2025)
 - Data foundation: It leverages USEPA’s FLOWSA (https://github.com/USEPA/flowsa), which is also a core data source for USEEIO. Pairing the two lets you go from “which sectors and tiers?” to “which GHG sources within those sectors?”
 
 GHG source disaggregation completes the DecarbNexus primary disaggregation workflow using USEEIO data, as illustrated below.
