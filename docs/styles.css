@@ -14,7 +14,7 @@
 }
 
 html,body{height:100%}
-body{font-family:'Lato',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:0 1rem 0;color:var(--text);background:var(--bg);display:flex;flex-direction:column;min-height:100vh}
+body{font-family:'Lato',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:0 1rem 2rem;color:var(--text);background:var(--bg)}
 header{max-width:1100px;margin:1rem auto}
 header h1{color:var(--accent);font-weight:700;margin:.5rem 0}
 .note a, a{color:var(--accent);text-decoration:underline}
@@ -26,10 +26,8 @@ header h1{color:var(--accent);font-weight:700;margin:.5rem 0}
 .legend{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.5rem;color:var(--muted)}
 .legend .item{display:flex;align-items:center;gap:.4rem}
 .legend .swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
-main{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-#chart{display:flex;justify-content:center;align-items:center;flex:1 1 auto;height:100%;min-height:320px;border:1px solid var(--border);border-radius:8px;background:var(--panel);box-sizing:border-box}
-/* Ensure embedded SVG does not add extra spacing */
-#chart svg{display:block}
+main{max-width:1100px;margin:0 auto}
+#chart{display:flex;justify-content:center;align-items:center;min-height:520px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
 .note{color:var(--muted)}
 .tooltip{position:absolute;background:#171717;color:#dff6fb;padding:.45rem .6rem;border:1px solid var(--border);border-radius:4px;pointer-events:none;font-size:.85rem}
 select,button,input{padding:.35rem .5rem;border:1px solid var(--border);border-radius:4px;background:var(--control);color:var(--text)}
