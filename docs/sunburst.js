@@ -29,6 +29,18 @@ const formatNum = d3.format(",.4f");
 
 const tooltip = d3.select("#tooltip");
 
+// Set the chart container height so the sunburst fits within the viewport
+function setChartHeight(bufferPx = 32) {
+  const chart = document.getElementById('chart');
+  if (!chart) return;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+  // Use the chart's current top relative to the viewport to compute available space
+  const rect = chart.getBoundingClientRect();
+  const top = Math.max(0, rect.top);
+  const available = Math.max(320, Math.floor(vh - top - bufferPx));
+  chart.style.height = available + 'px';
+}
+
 async function loadCSV() {
   const candidates = [
     // Prefer same-origin bundle (downloaded into docs/data by GitHub Actions)
@@ -176,11 +188,14 @@ function renderSunburst(rootData, centerLabel, minShare) {
     .domain(["Economic tier 1", "Economic tier 2", "Economic tier 3+"])
     .range(["#0099CC", "#9C27B0", "#20576E"]);
 
-  // compute container size
+  // compute container size to fit available height
   const container = document.getElementById("chart");
-  const maxW = Math.min(900, (container.clientWidth || 700));
-  WIDTH = Math.max(420, maxW);
-  RADIUS = WIDTH / 2;
+  const w = Math.min(900, (container.clientWidth || 700));
+  // Use container height when available; fallback to width if height is 0
+  const h = container.clientHeight || w;
+  const size = Math.max(320, Math.min(w, h));
+  WIDTH = size;
+  RADIUS = size / 2;
 
   const partition = d3.partition().size([2 * Math.PI, RADIUS]);
 
@@ -216,7 +231,8 @@ function renderSunburst(rootData, centerLabel, minShare) {
     .append("svg")
     .attr("viewBox", [0, 0, WIDTH, WIDTH])
     .style("max-width", "100%")
-    .style("height", "auto");
+    .style("width", "100%")
+    .style("height", "100%");
 
   const g = svg.append("g").attr("transform", `translate(${RADIUS},${RADIUS})`);
 
@@ -418,19 +434,23 @@ async function init() {
     setLoading(true);
     const rows = allRows.filter((d) => d[cols.commodity] === chosen);
     const second = secondSel.value;
-    const tree = buildHierarchy(rows, cols, classData.map, second);
-  const label = `Disaggregated ${toName(chosen)} emissions`;
-    const minPct = Math.max(0, (+document.getElementById("minPct").value || 0) / 100);
-    renderSunburst(tree, label, minPct);
 
-    // Update figure title
+    // Update figure title first (affects layout)
     const secondLabel = secondSel.options[secondSel.selectedIndex].textContent;
-  const title = `${toName(chosen)} disaggregated by Economic tier, ${secondLabel}, and scope (% of total supply chain emissions without margins)`;
+    const title = `${toName(chosen)} disaggregated by Economic tier, ${secondLabel}, and scope (% of total supply chain emissions without margins)`;
     const titleEl = document.getElementById("figureTitle");
     if (titleEl) titleEl.textContent = title;
 
-    // Render legend
+    // Render legend next (affects chart top position)
     renderLegend();
+
+    // Set chart height so the sunburst fits from title to bottom with a buffer
+    setChartHeight(32);
+
+    const tree = buildHierarchy(rows, cols, classData.map, second);
+    const label = `Disaggregated ${toName(chosen)} emissions`;
+    const minPct = Math.max(0, (+document.getElementById("minPct").value || 0) / 100);
+    renderSunburst(tree, label, minPct);
     setLoading(false);
   }
 
@@ -442,6 +462,27 @@ async function init() {
   // Initial render with first commodity and prefer names when available
   select.selectedIndex = 0;
   redraw();
+
+  // After fonts load, recalc layout once (prevents overflow from late font metrics)
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      setChartHeight(32);
+      redraw();
+    }).catch(() => {});
+  }
+  // Fallback: small delayed recalculation after initial paint
+  setTimeout(() => { setChartHeight(32); redraw(); }, 350);
+
+  // Re-render on window resize (debounced)
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      // Recompute container height then redraw
+      setChartHeight(32);
+      redraw();
+    }, 150);
+  });
 }
 
 init().catch((err) => {
