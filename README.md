@@ -129,8 +129,14 @@ Additional reading and context:
       - Generation losses from T&D are reported under the Scope 1 of the embedded electricity sector.
       - Upstream fuel-related emissions are reported under the Scope 1 & 2 of the embedded sectors in the fuel supply chains.
 
-  4) Disaggregation granularity
-    - This workflow disaggregates emissions into the Scope 1 and Scope 2 components of USEEIO sectors only. Disaggregating into intermediate commodities within each tier (so you can see which commodity purchases inside a given supplier sector drive emissions) is planned for a future version.
+  4) Disaggregation options
+    - **Commodity-level purchases:** This workflow disaggregates emissions into the Scope 1 and Scope 2 components of *USEEIO sectors* only. It does not provide totals for the actual commodities purchased within those supplier sectors. In other words, you cannot see the total emissions of specific commodities purchased from sectors in each tier.
+    - **Tier linkages:** For simplicity and to limit file sizes, linkages between Tier 2 and Tier 3+ are not retained in the standard outputs. Only connections between Tier 1 and Tier 2 or between Tier 1 and Tier 3+ are preserved.
+    - **Tier 3+ granularity:** The `Tier 3+` group is not disaggregated into individual tiers (Tier 3, Tier 4, etc.). We found this additional granularity to have limited practical use for most applications and do not plan to disaggregate it further in the standard outputs.
+
+    Advanced users can obtain more granular results (such as commodity-level totals, detailed tier linkages, or a full Tier 3+ decomposition) by modifying the R code, provided they have a working knowledge of EEIO theory.
+
+    We welcome feedback on which features to prioritize for future releases. Please open a thread in the repository's **Discussions** to share your thoughts on what would be most useful.
 
 ## Beginner setup: getting R running (no prior coding experience)
 
