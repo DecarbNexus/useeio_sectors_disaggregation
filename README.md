@@ -12,7 +12,7 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 ### Interactive visual
 
 - Try the interactive sunburst built from the CSV in this repo: https://open.decarbnexus.com/
-- It lets you pick a commodity and explores Scope (1/2) → Tier (1/2/3+) → Sector codes as a sunburst using Relative_Contribution values.
+- It lets you pick a commodity and explores Economic tiers (1/2/3+) → Scopes (1/2) → Sectors as a sunburst using Relative_Contribution values.
 
 ### Data tables
 
@@ -42,12 +42,15 @@ For context on how these contributions help translate Scope 3 inventories into a
 1) Install R (≥ 4.2) and RTools (Windows). Optional but recommended: RStudio.
 2) Clone or download this repository.
 3) Edit `config.yml` (see below) if you want to change the SEF version or Scope 2 sectors.
-4) Render the analysis from R/RStudio:
-   ```r
-   rmarkdown::render("analysis/generate_scope3_disaggregation_table_tier1_2_3+.Rmd")
-   ```
+4) Run the analysis (no Pandoc required):
+  - Option A – script (recommended):
+    ```r
+    source("scripts/run_analysis.R")
+    ```
+    This extracts the code from the Rmd and runs it end‑to‑end, writing Excel/CSVs to `outputs/`.
+  - Option B – interactive: open `analysis/generate_scope3_disaggregation_table_tier1_2_3+.Rmd` and "Run All Chunks" to see results at each step; outputs still go to `outputs/`.
 
-   Or click the "Knit" button when viewing the Rmd in RStudio.
+5) Optional: “Knit” (aka render an HTML/PDF document of the Rmd). Knitting uses `rmarkdown::render()` which requires Pandoc. RStudio bundles Pandoc; otherwise install it from https://pandoc.org/installing.html. Knitting is not required to produce the Excel/CSV outputs.
 
 Artifacts will be saved under `outputs/` and are committed to the repo so non-technical users can download them directly.
 
@@ -57,6 +60,7 @@ This workflow installs packages on first run. At minimum, you’ll need:
 
 - Internet access (to install packages and download model specs)
 - R packages: pacman, yaml, dplyr, reshape2, knitr, httr, openxlsx, stringr, tidyr, devtools, useeior
+- Pandoc only if you want to “Knit”/render a document (RStudio bundles it; otherwise install separately)
 
 The R Markdown takes care of installing `devtools`/`useeior` versions that match your selected SEF version.
 
@@ -80,7 +84,7 @@ scope_2_sectors:
 - `analysis/generate_scope3_disaggregation_table_tier1_2_3+.Rmd` – Main analysis; builds model, runs decomposition, and exports outputs
 - `config.yml` – User configuration (version and Scope 2 sectors). Edit this.
 - `spec_files/` – USEEIO model spec files (downloaded or stored)
-- `scripts/render.R` – One-click render helper
+- `scripts/run_analysis.R` – Run the analysis without Pandoc; writes Excel/CSV to `outputs/`
 - `outputs/` – Rendered outputs (Excel/CSV) ready for end users
 - `local/` – Your scratch area; ignored by Git
 
@@ -93,6 +97,13 @@ scope_2_sectors:
 5) Use the "Tier" field to see whether impacts are direct (Tier 1), from immediate suppliers (Tier 2), or further upstream (Tier 3+).
 6) Use the "Scope" field to distinguish Scope 1 vs Scope 2 drivers.
 7) For deeper context on what a sector represents and how it is classified, check the "sector_classification" tab.
+
+Deeper dive (EEIO data): The workbook also includes underlying EEIO data to support advanced analysis:
+- Direct GHG impacts vector (`d_GHG`) – per‑sector direct intensity; can be diagonalized to `D` if needed
+- Direct requirements matrix (`A`)
+- Leontief inverse (`L`)
+
+These sheets let you reproduce or extend the decomposition, inspect technical coefficients, and verify totals.
 
 Additional reading and context:
 - Deep Value Chain Analysis and scaling corporate decarbonization investments (AIM Platform): https://aimplatform.org/what-is-deep-value-chain-analysis-and-how-can-it-scale-corporate-decarbonization-investments/
@@ -125,23 +136,23 @@ Windows (recommended simplest path):
 2) Install RTools (compile support): https://cran.r-project.org/bin/windows/Rtools/
 3) Install RStudio (optional but easier): https://posit.co/download/rstudio-desktop/
 4) Download/clone this repository and open it in RStudio (double-click the `.Rproj` file or use File > Open Project).
-5) In the RStudio, open `analysis/generate_scope3_disaggregation_table_tier1_2_3+.Rmd` and click "Knit" (or run the render line above). The process will install any missing packages and produce the Excel/CSV in `outputs/`.
-
-Note: If CMD cannot find Rscript, open RStudio and run `source("scripts/render.R")` instead.
+5) To run without Pandoc: either `source("scripts/run_analysis.R")` or open the Rmd and use "Run All Chunks". Both write Excel/CSV to `outputs/`.
+6) Optional Knitting: If you want a rendered HTML/PDF document, use the Knit button or `rmarkdown::render(...)`. This requires Pandoc (bundled with RStudio; otherwise install from pandoc.org). Not needed for the outputs.
 
 macOS:
 1) Install R: https://cran.r-project.org/bin/macosx/
 2) (Optional) Install Xcode Command Line Tools if prompted.
 3) Install RStudio: https://posit.co/download/rstudio-desktop/
-4) Open the project in RStudio and click "Knit" in `analysis/generate_scope3_disaggregation_table_tier1_2_3+.Rmd` (or run the render line above).
+4) Open the project in RStudio. To run without Pandoc: `source("scripts/run_analysis.R")` or "Run All Chunks" in the Rmd. Optional: Use Knit/render if you want a document (requires Pandoc).
 
 If you don’t want to install anything, you can still download the pre-built files directly from the `outputs/` folder on GitHub.
 
 ## Troubleshooting
 
-- If you encounter issues with Rscript or PATH: open RStudio and click "Knit" on the analysis Rmd.
-- Network/timeout errors when downloading specs: check connectivity or proxy settings, then re-run.
-- Package install issues: try `install.packages("pacman")` in R, then rerun the render.
+- Pandoc error while knitting: you don’t need to knit to produce outputs. Use `source("scripts/run_analysis.R")` or "Run All Chunks". If you do want to knit, install Pandoc (RStudio bundles it).
+- If you encounter issues with Rscript or PATH: open RStudio and use the script or run chunks interactively.
+- Network/timeout errors when downloading specs: check connectivity/proxy and re-run.
+- Package install issues: try `install.packages("pacman")` in R, then re-run the script.
 
 ## Feedback, questions, and feature requests
 
