@@ -158,6 +158,10 @@ If you don’t want to install anything, you can still download the pre-built fi
 
 We’re learning with you. Please use the repository’s Discussions tab to ask questions, request features, or share how you’re using the data.
 
+Peer review status
+
+We aim to have this workflow and its outputs peer-reviewed over the next few months. If you’re interested in participating in the review or testing the methods on your data, please open a Discussion or contact us via the repository.
+
 ## License
 
 See `LICENSE`.

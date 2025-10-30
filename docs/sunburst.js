@@ -425,7 +425,7 @@ async function init() {
 
     // Update figure title
     const secondLabel = secondSel.options[secondSel.selectedIndex].textContent;
-    const title = `${toName(chosen)} disaggregated by Economic tier, ${secondLabel}, and scope (% of total supply chain emissions without margins)`;
+    const title = `${toName(chosen)} disaggregated by Economic tier, ${secondLabel}, and Scope (% of total supply chain emissions without margins)`;
     const titleEl = document.getElementById("figureTitle");
     if (titleEl) titleEl.textContent = title;
 
