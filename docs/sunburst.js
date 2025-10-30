@@ -92,6 +92,7 @@ async function tryLoadClassification() {
     const sectorNameCol = findExact(["Sector name"]) || findLoose("sector name") || null;
     const commodityNameCol = findExact(["Commodity name"]) || findLoose("commodity name") || null;
     const categoryNameCol = findExact(["Category Name"]) || findLoose("category name") || null;
+  const categoryCodeCol = findExact(["Category Code"]) || findLoose("category code") || null;
     const subcatCodeCol = findExact(["Subcategory Code"]) || findLoose("subcategory code") || null;
     const subcatNameCol = findExact(["Subcategory Name"]) || findLoose("subcategory name") || null;
 
@@ -103,6 +104,7 @@ async function tryLoadClassification() {
           sector_name: sectorNameCol ? row[sectorNameCol] : undefined,
           commodity_name: commodityNameCol ? row[commodityNameCol] : undefined,
           category_name: categoryNameCol ? row[categoryNameCol] : undefined,
+          category_code: categoryCodeCol ? row[categoryCodeCol] : undefined,
           subcategory_code: subcatCodeCol ? row[subcatCodeCol] : undefined,
           subcategory_name: subcatNameCol ? row[subcatNameCol] : undefined,
         });

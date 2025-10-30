@@ -129,6 +129,9 @@ Additional reading and context:
       - Generation losses from T&D are reported under the Scope 1 of the embedded electricity sector.
       - Upstream fuel-related emissions are reported under the Scope 1 & 2 of the embedded sectors in the fuel supply chains.
 
+  4) Disaggregation granularity
+    - This workflow disaggregates emissions into the Scope 1 and Scope 2 components of USEEIO sectors only. Disaggregating into intermediate commodities within each tier (so you can see which commodity purchases inside a given supplier sector drive emissions) is planned for a future version.
+
 ## Beginner setup: getting R running (no prior coding experience)
 
 Windows (recommended simplest path):
