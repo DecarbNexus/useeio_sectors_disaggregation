@@ -284,6 +284,18 @@ function renderSunburst(rootData, centerLabel, minShare) {
 }
 
 async function init() {
+  // Insert a small license note under the legend if present
+  const legendHost = document.getElementById('legend');
+  if (legendHost && !document.getElementById('licenseNote')){
+    const note = document.createElement('div');
+    note.id = 'licenseNote';
+    note.style.fontSize = '0.85rem';
+    note.style.opacity = '0.9';
+    note.style.marginTop = '0.35rem';
+    note.innerHTML = 'Data license: <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>';
+    legendHost.appendChild(note);
+  }
+
   const classData = await tryLoadClassification();
   const allRows = await loadCSV();
   const cols = getColumnsMap(allRows.columns);
