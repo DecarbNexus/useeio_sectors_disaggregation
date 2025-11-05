@@ -120,7 +120,24 @@ if (!dir.exists(spec_dir)) {
   dir.create(spec_dir)
 }
 # Define the path for the local specification file
-model_name <- "USEEIOv2.2.22-GHG"
+# Resolve model_name dynamically from a local mapping that depends on config$sef_version
+model_map <- tryCatch(read_yaml("model_spec_mapping.yml"), error = function(e) NULL)
+if (!is.null(model_map) && !is.null(model_map$model_name_by_sef_version[[config$sef_version]])) {
+  model_name <- model_map$model_name_by_sef_version[[config$sef_version]]
+} else {
+  # Do not default silently: instruct user to add the mapping explicitly
+  msg <- paste0(
+    "No model mapping found for sef_version '", config$sef_version, "'.\n",
+    "Please add an entry in 'model_spec_mapping.yml' under 'model_name_by_sef_version'.\n",
+    "For example:\n",
+    "  \"", config$sef_version, "\": \"USEEIOvX.Y.Z-GHG\"\n\n",
+    "How to find the correct USEEIO model name: \n",
+    " - Check the SEF release notes and/or Versioning.yml in USEPA/supply-chain-factors.\n",
+    " - URL: https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/Versioning.yml\n",
+    " - Identify the model spec name used for that SEF release (e.g., USEEIOv2.2.22-GHG).\n"
+  )
+  stop(msg)
+}
 local_spec_file <- file.path(spec_dir, paste0(model_name, ".yml"))
 
 # --- 2. Download the spec file if it doesn't exist locally ---
@@ -650,7 +667,9 @@ author_info <- data.frame(
     "Website",
     "Contact",
     "Open-source repository",
-    "Q&A + Discussion"
+    "Q&A + Discussion",
+    "Data License",
+    "License URL"
   ),
   Value = c(
     "Damien Lieber",
@@ -658,7 +677,9 @@ author_info <- data.frame(
     "decarbnexus.com",
     "contact@decarbnexus.com",
     "https://github.com/DecarbNexus/useeio_sectors_disaggregation",
-    "https://github.com/DecarbNexus/useeio_sectors_disaggregation/discussions"
+    "https://github.com/DecarbNexus/useeio_sectors_disaggregation/discussions",
+    "CC BY 4.0 (see LICENSE-DATA.md)",
+    "https://creativecommons.org/licenses/by/4.0/"
   ),
   stringsAsFactors = FALSE
 )
@@ -717,6 +738,17 @@ log_step(sprintf("Saved Excel: %s", excel_filename))
 write.csv(final_table_by_code %>%
   rename(!!abs_col_name := Absolute_Contribution_GHG), csv_filename, row.names = FALSE, na = "")
 log_step(sprintf("Wrote CSV: %s", csv_filename))
+
+# Write a short data license notice into outputs/
+data_license_text <- c(
+  "Data License: CC BY 4.0",
+  "Full license: https://creativecommons.org/licenses/by/4.0/",
+  "If you use these datasets, cite DecarbNexus LLC and acknowledge USEPA USEEIO/SEF sources:",
+  " - USEEIO: https://github.com/USEPA/useeior",
+  " - Supply Chain Emission Factors: https://github.com/USEPA/supply-chain-factors"
+)
+writeLines(data_license_text, file.path(outputs_dir, "DATA_LICENSE.txt"))
+log_step("Wrote file: outputs/DATA_LICENSE.txt")
 
 # Electricity-only CSV export
 write.csv(electric_only_by_code %>%

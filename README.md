@@ -172,8 +172,8 @@ Peer review status
 We aim to have this workflow and its outputs peer-reviewed over the next few months. If you’re interested in participating in the review or testing the methods on your data, please open a Discussion or contact us via the repository.
 
 ## License
-
-See `LICENSE`.
+- Code: See `LICENSE`.
+- Data (files under `outputs/` and data attached to GitHub releases): CC BY 4.0. See `LICENSE-DATA.md` and https://creativecommons.org/licenses/by/4.0/.
 
 ## Credits and acknowledgement
 
