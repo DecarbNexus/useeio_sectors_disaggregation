@@ -57,7 +57,7 @@ pacman::p_load(
 )
 
 # --- 2. Load User Configuration ---
-config <- read_yaml("config.yml")
+config <- read_yaml("../config.yml")
 cat("User requested Supply Chain Factors (SEF) version:", config$sef_version, "\n")
 
 # --- 3. Fetch Model Specifications from USEPA GitHub Repository ---
