@@ -53,7 +53,9 @@ pacman::p_load(
   openxlsx,   # For writing to Excel files
   stringr,    # For advanced string manipulation
   tidyr,      # For separate() function
-  cli         # For concise, readable status messages
+  cli,        # For concise, readable status messages
+  arrow,      # For Parquet export (optimized columnar format)
+  jsonlite    # For hierarchical JSON and JSON-LD export
 )
 
 # --- 2. Load User Configuration ---
@@ -768,6 +770,104 @@ cat("Saved Excel:", excel_filename, "\n")
 cat("Saved Contributions CSVs:  ", csv_filename, "\n")
 cat("Saved Electricity-only CSV: ", csv_elec_filename, "\n")
 cat("Saved Sector Classification CSV:  ", csv_sc_filename, "\n")
+
+# --- 6. Structured outputs for data science and knowledge graphs ---
+log_step("Writing structured outputs (Parquet, JSON, JSON-LD)...")
+
+# 6.1 Parquet: optimized columnar format for data science
+parquet_filename <- file.path(outputs_dir, paste0(file_basename, ".parquet"))
+arrow::write_parquet(
+  final_table_by_code %>% rename(!!abs_col_name := Absolute_Contribution_GHG),
+  parquet_filename,
+  compression = "snappy"
+)
+log_step(sprintf("Wrote Parquet: %s", parquet_filename))
+
+# 6.2 Hierarchical JSON: nested structure preserving commodity > tier > sector > scope
+# Build nested hierarchy for cleaner structure
+nested_json <- final_table_by_code %>%
+  rename(absolute_contribution = Absolute_Contribution_GHG) %>%
+  group_by(Disaggregated_Commodity_Code) %>%
+  summarise(
+    tiers = list(
+      cur_data() %>%
+        group_by(Economic_Tier) %>%
+        summarise(
+          sectors = list(
+            cur_data() %>%
+              group_by(Embedded_Sector_Code, Embedded_Sector_Code_for_GHG_sources) %>%
+              summarise(
+                scopes = list(
+                  cur_data() %>%
+                    transmute(
+                      scope = Scope,
+                      absolute_contribution,
+                      relative_contribution = Relative_Contribution
+                    )
+                ),
+                .groups = "drop"
+              ) %>%
+              rename(
+                sector_code = Embedded_Sector_Code,
+                ghg_source_code = Embedded_Sector_Code_for_GHG_sources
+              )
+          ),
+          .groups = "drop"
+        ) %>%
+        rename(tier = Economic_Tier)
+    ),
+    .groups = "drop"
+  ) %>%
+  rename(commodity_code = Disaggregated_Commodity_Code)
+
+json_filename <- file.path(outputs_dir, paste0(file_basename, ".json"))
+jsonlite::write_json(
+  nested_json,
+  json_filename,
+  pretty = TRUE,
+  auto_unbox = TRUE,
+  digits = 6
+)
+log_step(sprintf("Wrote hierarchical JSON: %s", json_filename))
+
+# 6.3 JSON-LD: RDF-ready with @context for knowledge graph ingestion
+# Define vocabulary for USEEIO disaggregation factors
+jsonld_context <- list(
+  "@vocab" = "https://decarbnexus.com/vocab/useeio-disaggregation#",
+  "schema" = "http://schema.org/",
+  "useeio" = "https://www.epa.gov/land-research/us-environmentally-extended-input-output-useeio-technical-content#",
+  "ghg" = "http://www.wikidata.org/entity/",
+  "commodity_code" = list("@id" = "useeio:commodity", "@type" = "@id"),
+  "sector_code" = list("@id" = "useeio:sector", "@type" = "@id"),
+  "ghg_source_code" = list("@id" = "ghgSource", "@type" = "@id"),
+  "tier" = "economicTier",
+  "scope" = "ghgScope",
+  "absolute_contribution" = list("@id" = "absoluteContribution", "@type" = "schema:Float"),
+  "relative_contribution" = list("@id" = "relativeContribution", "@type" = "schema:Float"),
+  "tiers" = "hasTier",
+  "sectors" = "hasSector",
+  "scopes" = "hasScope"
+)
+
+jsonld_output <- list(
+  "@context" = jsonld_context,
+  "@graph" = nested_json
+)
+
+jsonld_filename <- file.path(outputs_dir, paste0(file_basename, ".jsonld"))
+jsonlite::write_json(
+  jsonld_output,
+  jsonld_filename,
+  pretty = TRUE,
+  auto_unbox = TRUE,
+  digits = 6
+)
+log_step(sprintf("Wrote JSON-LD: %s", jsonld_filename))
+
+cat("Saved structured outputs:\n")
+cat(" - Parquet:", parquet_filename, "\n")
+cat(" - JSON:   ", json_filename, "\n")
+cat(" - JSON-LD:", jsonld_filename, "\n")
 ```
 
 ## 6. Preview of Final Results
