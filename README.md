@@ -16,12 +16,28 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Data tables
 
-- Go to the `outputs/` folder and download the latest files:
-  - Excel: `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
-  - CSV:   `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
-  - Electricity-only CSV:   `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
-- Open in Excel or your favorite spreadsheet tool.
-- Start with the "Contributions_by_Name" tab if you prefer industry names over codes.
+Download the latest files from the `outputs/` folder:
+
+- **Excel** (all-in-one workbook): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
+- **CSV** (flat tables): `outputs/csv/`
+  - Main contributions: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
+  - Electricity-only: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
+  - Sector classification: `sector_classification.csv`
+- **Parquet** (columnar, data science): `outputs/parquet/`
+  - Main contributions + sector classification
+- **JSON** (hierarchical): `outputs/json/`
+  - Main contributions (nested: commodity > tier > sector > scope) + sector classification
+- **JSON-LD** (RDF-ready): `outputs/jsonld/`
+  - Main contributions + sector classification with `@context` vocabularies
+
+Open Excel files in your spreadsheet tool or start with the "Contributions_by_Name" tab for human-readable industry names.
+
+#### Format guide
+
+- **Excel/CSV**: Flat tables, best for spreadsheet users and simple imports.
+- **Parquet**: Snappy-compressed columnar format; optimized for pandas, Polars, DuckDB, Apache Spark. ~10× faster reads than CSV.
+- **JSON**: Nested hierarchy (`commodity > tier > sector > scope`); ideal for web APIs, JavaScript/Python data science pipelines.
+- **JSON-LD**: RDF-ready with `@context` vocabulary; can be ingested into triple stores (Apache Jena, RDF4J) or converted to Turtle/N-Triples for knowledge graphs.
 
 What’s inside (high level):
 - Contributions by Tier and Scope show how much each upstream sector contributes to the chosen commodity’s GHG intensity.
@@ -56,11 +72,11 @@ Artifacts will be saved under `outputs/` and are committed to the repo so non-te
 
 ## Requirements
 
-This workflow installs packages on first run. At minimum, you’ll need:
+This workflow installs packages on first run. At minimum, you'll need:
 
 - Internet access (to install packages and download model specs)
-- R packages: pacman, yaml, dplyr, reshape2, knitr, httr, openxlsx, stringr, tidyr, devtools, useeior
-- Pandoc only if you want to “Knit”/render a document (RStudio bundles it; otherwise install separately)
+- R packages: pacman, yaml, dplyr, reshape2, knitr, httr, openxlsx, stringr, tidyr, cli, devtools, useeior, arrow (for Parquet), jsonlite (for JSON/JSON-LD)
+- Pandoc only if you want to "Knit"/render a document (RStudio bundles it; otherwise install separately)
 
 The R Markdown takes care of installing `devtools`/`useeior` versions that match your selected SEF version.
 
