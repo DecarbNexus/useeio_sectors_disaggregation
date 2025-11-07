@@ -643,6 +643,15 @@ log_step(sprintf("sector_classification ready (%s rows)", format(nrow(sector_cla
 outputs_dir <- "outputs"
 if (!dir.exists(outputs_dir)) dir.create(outputs_dir, recursive = TRUE)
 
+# Create format subdirectories
+csv_dir <- file.path(outputs_dir, "csv")
+parquet_dir <- file.path(outputs_dir, "parquet")
+json_dir <- file.path(outputs_dir, "json")
+jsonld_dir <- file.path(outputs_dir, "jsonld")
+for (d in c(csv_dir, parquet_dir, json_dir, jsonld_dir)) {
+  if (!dir.exists(d)) dir.create(d, recursive = TRUE)
+}
+
 file_basename <- paste(
   "SEF",
   config$sef_version,
@@ -652,10 +661,13 @@ file_basename <- paste(
   paste0("IO", model_specs[model_specs$Specification == "Input-Output Model's Year", "Value"])
 )
 
+# Excel in main outputs directory
 excel_filename <- file.path(outputs_dir, paste0(file_basename, ".xlsx"))
-csv_filename   <- file.path(outputs_dir, paste0(file_basename, ".csv"))
-csv_elec_filename <- file.path(outputs_dir, paste0(file_basename, "_electricity_only.csv"))
-csv_sc_filename   <- file.path(outputs_dir, "sector_classification.csv")
+
+# CSV files in csv/ subdirectory
+csv_filename   <- file.path(csv_dir, paste0(file_basename, ".csv"))
+csv_elec_filename <- file.path(csv_dir, paste0(file_basename, "_electricity_only.csv"))
+csv_sc_filename   <- file.path(csv_dir, "sector_classification.csv")
 
 wb <- createWorkbook()
 
@@ -775,13 +787,16 @@ cat("Saved Sector Classification CSV:  ", csv_sc_filename, "\n")
 log_step("Writing structured outputs (Parquet, JSON, JSON-LD)...")
 
 # 6.1 Parquet: optimized columnar format for data science
-parquet_filename <- file.path(outputs_dir, paste0(file_basename, ".parquet"))
+parquet_filename <- file.path(parquet_dir, paste0(file_basename, ".parquet"))
+parquet_sc_filename <- file.path(parquet_dir, "sector_classification.parquet")
 arrow::write_parquet(
   final_table_by_code %>% rename(!!abs_col_name := Absolute_Contribution_GHG),
   parquet_filename,
   compression = "snappy"
 )
+arrow::write_parquet(sector_classification, parquet_sc_filename, compression = "snappy")
 log_step(sprintf("Wrote Parquet: %s", parquet_filename))
+log_step(sprintf("Wrote Parquet: %s", parquet_sc_filename))
 
 # 6.2 Hierarchical JSON: nested structure preserving commodity > tier > sector > scope
 # Build nested hierarchy for cleaner structure
@@ -820,7 +835,12 @@ nested_json <- final_table_by_code %>%
   ) %>%
   rename(commodity_code = Disaggregated_Commodity_Code)
 
-json_filename <- file.path(outputs_dir, paste0(file_basename, ".json"))
+# Sector classification as flat JSON (no further nesting needed)
+sc_json <- sector_classification %>%
+  rename_with(~gsub(" ", "_", tolower(.)), everything())
+
+json_filename <- file.path(json_dir, paste0(file_basename, ".json"))
+json_sc_filename <- file.path(json_dir, "sector_classification.json")
 jsonlite::write_json(
   nested_json,
   json_filename,
@@ -828,7 +848,14 @@ jsonlite::write_json(
   auto_unbox = TRUE,
   digits = 6
 )
+jsonlite::write_json(
+  sc_json,
+  json_sc_filename,
+  pretty = TRUE,
+  auto_unbox = TRUE
+)
 log_step(sprintf("Wrote hierarchical JSON: %s", json_filename))
+log_step(sprintf("Wrote JSON: %s", json_sc_filename))
 
 # 6.3 JSON-LD: RDF-ready with @context for knowledge graph ingestion
 # Define vocabulary for USEEIO disaggregation factors
@@ -854,7 +881,27 @@ jsonld_output <- list(
   "@graph" = nested_json
 )
 
-jsonld_filename <- file.path(outputs_dir, paste0(file_basename, ".jsonld"))
+# Sector classification JSON-LD with simple schema.org vocabulary
+sc_jsonld_context <- list(
+  "@vocab" = "https://decarbnexus.com/vocab/useeio-classification#",
+  "schema" = "http://schema.org/",
+  "category_code" = list("@id" = "categoryCode", "@type" = "schema:Text"),
+  "category_name" = list("@id" = "categoryName", "@type" = "schema:Text"),
+  "subcategory_code" = list("@id" = "subcategoryCode", "@type" = "schema:Text"),
+  "subcategory_name" = list("@id" = "subcategoryName", "@type" = "schema:Text"),
+  "sector_code" = list("@id" = "sectorCode", "@type" = "@id"),
+  "sector_name" = list("@id" = "sectorName", "@type" = "schema:Text"),
+  "commodity_name" = list("@id" = "commodityName", "@type" = "schema:Text"),
+  "description" = list("@id" = "schema:description", "@type" = "schema:Text")
+)
+
+sc_jsonld_output <- list(
+  "@context" = sc_jsonld_context,
+  "@graph" = sc_json
+)
+
+jsonld_filename <- file.path(jsonld_dir, paste0(file_basename, ".jsonld"))
+jsonld_sc_filename <- file.path(jsonld_dir, "sector_classification.jsonld")
 jsonlite::write_json(
   jsonld_output,
   jsonld_filename,
@@ -862,12 +909,22 @@ jsonlite::write_json(
   auto_unbox = TRUE,
   digits = 6
 )
+jsonlite::write_json(
+  sc_jsonld_output,
+  jsonld_sc_filename,
+  pretty = TRUE,
+  auto_unbox = TRUE
+)
 log_step(sprintf("Wrote JSON-LD: %s", jsonld_filename))
+log_step(sprintf("Wrote JSON-LD: %s", jsonld_sc_filename))
 
 cat("Saved structured outputs:\n")
-cat(" - Parquet:", parquet_filename, "\n")
-cat(" - JSON:   ", json_filename, "\n")
-cat(" - JSON-LD:", jsonld_filename, "\n")
+cat(" - Parquet (data):  ", parquet_filename, "\n")
+cat(" - Parquet (class): ", parquet_sc_filename, "\n")
+cat(" - JSON (data):     ", json_filename, "\n")
+cat(" - JSON (class):    ", json_sc_filename, "\n")
+cat(" - JSON-LD (data):  ", jsonld_filename, "\n")
+cat(" - JSON-LD (class): ", jsonld_sc_filename, "\n")
 ```
 
 ## 6. Preview of Final Results

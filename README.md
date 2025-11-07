@@ -16,21 +16,26 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Data tables
 
-- Go to the `outputs/` folder and download the latest files:
-  - **Excel**: `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
-  - **CSV**:   `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
-  - **Parquet** (optimized columnar format for data science): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.parquet`
-  - **JSON** (hierarchical: commodity > tier > sector > scope): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.json`
-  - **JSON-LD** (RDF-ready for knowledge graphs): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.jsonld`
-  - **Electricity-only CSV**:   `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
-  - **Sector classification**: `outputs/sector_classification.csv`
-- Open in Excel or your favorite spreadsheet tool.
-- Start with the "Contributions_by_Name" tab if you prefer industry names over codes.
+Download the latest files from the `outputs/` folder:
+
+- **Excel** (all-in-one workbook): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
+- **CSV** (flat tables): `outputs/csv/`
+  - Main contributions: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
+  - Electricity-only: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
+  - Sector classification: `sector_classification.csv`
+- **Parquet** (columnar, data science): `outputs/parquet/`
+  - Main contributions + sector classification
+- **JSON** (hierarchical): `outputs/json/`
+  - Main contributions (nested: commodity > tier > sector > scope) + sector classification
+- **JSON-LD** (RDF-ready): `outputs/jsonld/`
+  - Main contributions + sector classification with `@context` vocabularies
+
+Open Excel files in your spreadsheet tool or start with the "Contributions_by_Name" tab for human-readable industry names.
 
 #### Format guide
 
 - **Excel/CSV**: Flat tables, best for spreadsheet users and simple imports.
-- **Parquet**: Snappy-compressed columnar format; optimized for pandas, Polars, DuckDB, Apache Spark. ~10x faster reads than CSV.
+- **Parquet**: Snappy-compressed columnar format; optimized for pandas, Polars, DuckDB, Apache Spark. ~10× faster reads than CSV.
 - **JSON**: Nested hierarchy (`commodity > tier > sector > scope`); ideal for web APIs, JavaScript/Python data science pipelines.
 - **JSON-LD**: RDF-ready with `@context` vocabulary; can be ingested into triple stores (Apache Jena, RDF4J) or converted to Turtle/N-Triples for knowledge graphs.
 
