@@ -26,13 +26,6 @@ Download the latest files from the v1.0 release:
 
 Open Excel files in your spreadsheet tool or start with the "Contributions_by_Name" tab for human-readable industry names.
 
-#### Format guide
-
-- **Excel/CSV**: Flat tables, best for spreadsheet users and simple imports.
-- **Parquet**: Snappy-compressed columnar format; optimized for pandas, Polars, DuckDB, Apache Spark. ~10× faster reads than CSV.
-- **JSON**: Nested hierarchy (`commodity > tier > sector > scope`); ideal for web APIs, JavaScript/Python data science pipelines.
-- **JSON-LD**: RDF-ready with `@context` vocabulary; can be ingested into triple stores (Apache Jena, RDF4J) or converted to Turtle/N-Triples for knowledge graphs.
-
 What’s inside (high level):
 - Contributions by Tier and Scope show how much each upstream sector contributes to the chosen commodity’s GHG intensity.
 - “Absolute contribution” columns are intensities (kgCO2e per USD of the embedded commodity, in the specified IO year).
