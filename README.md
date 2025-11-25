@@ -23,12 +23,6 @@ Download the latest files from the v1.0 release:
   - Main contributions: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
   - Electricity-only: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
   - Sector classification: `sector_classification.csv`
-- **Parquet** (columnar, data science): `parquet/`
-  - Main contributions + sector classification
-- **JSON** (hierarchical): `json/`
-  - Main contributions (nested: commodity > tier > sector > scope) + sector classification
-- **JSON-LD** (RDF-ready): `jsonld/`
-  - Main contributions + sector classification with `@context` vocabularies
 
 Open Excel files in your spreadsheet tool or start with the "Contributions_by_Name" tab for human-readable industry names.
 
