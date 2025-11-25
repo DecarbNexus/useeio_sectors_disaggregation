@@ -16,18 +16,18 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Data tables
 
-Download the latest files from the `outputs/` folder:
+Download the latest files from the v1.0 release folder:
 
-- **Excel** (all-in-one workbook): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
-- **CSV** (flat tables): `outputs/csv/`
+- **Excel** (all-in-one workbook): `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
+- **CSV** (flat tables): `csv/`
   - Main contributions: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
   - Electricity-only: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
   - Sector classification: `sector_classification.csv`
-- **Parquet** (columnar, data science): `outputs/parquet/`
+- **Parquet** (columnar, data science): `parquet/`
   - Main contributions + sector classification
-- **JSON** (hierarchical): `outputs/json/`
+- **JSON** (hierarchical): `json/`
   - Main contributions (nested: commodity > tier > sector > scope) + sector classification
-- **JSON-LD** (RDF-ready): `outputs/jsonld/`
+- **JSON-LD** (RDF-ready): `jsonld/`
   - Main contributions + sector classification with `@context` vocabularies
 
 Open Excel files in your spreadsheet tool or start with the "Contributions_by_Name" tab for human-readable industry names.
