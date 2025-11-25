@@ -16,7 +16,7 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Data tables
 
-Download the latest files from the v1.0 release folder:
+Download the latest files from the v1.0 release:
 
 - **Excel** (all-in-one workbook): `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
 - **CSV** (flat tables): `csv/`
