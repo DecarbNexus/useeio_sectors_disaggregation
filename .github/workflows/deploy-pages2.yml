@@ -1,0 +1,57 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Fetch release assets into site bundle
+        shell: bash
+        env:
+          OWNER: DecarbNexus
+          REPO: useeio_sectors_disaggregation
+          TAG: v1.0
+          DATA_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv
+          XLSX_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.xlsx
+          ELEC_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_electricity_only.csv
+          CLASS_FILENAME: sector_classification.csv
+        run: |
+          set -euo pipefail
+          mkdir -p docs/data
+          echo "Downloading release assets ${TAG} into docs/data ..."
+          curl -L --fail -o "docs/data/${DATA_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${DATA_FILENAME}"
+          curl -L --fail -o "docs/data/${XLSX_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${XLSX_FILENAME}"
+          curl -L --fail -o "docs/data/${ELEC_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${ELEC_FILENAME}"
+          curl -L --fail -o "docs/data/${CLASS_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${CLASS_FILENAME}"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
