@@ -11,7 +11,7 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Interactive visual
 
-- Try the interactive sunburst built from the CSV in this repo: https://open.decarbnexus.com/
+- Try the [interactive sunburst](https://decarbnexus.github.io/useeio_sectors_disaggregation/) built from the CSV in this repo.
 - It lets you pick a commodity and explores Economic tiers (1/2/3+) → Scopes (1/2) → Sectors as a sunburst using Relative_Contribution values.
 
 ### Data tables
