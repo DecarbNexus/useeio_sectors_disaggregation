@@ -1,0 +1,22 @@
+# --------------------------------------------------------------------------
+#               USER CONFIGURATION FOR PATH ANALYSIS SCRIPT
+# --------------------------------------------------------------------------
+# Instructions:
+# 1. Edit the 'sef_version' to the desired Supply Chain Emission Factors
+#    (SEF) table version from the USEPA repository.
+# 2. Save this file and then run the 'structured_path_analysis.Rmd' script.
+# --------------------------------------------------------------------------
+
+# Set the desired version of the Supply Chain Emission Factors (SEF) table.
+# The script will automatically look up the correct USEEIO model and package
+# version associated with this SEF release.
+# Example: "v1.1.1"
+sef_version: "v1.3.0"
+
+
+# Define the list of sectors whose direct emissions should be categorized as Scope 2.
+# These are typically utilities like electricity, steam, and heat.
+# Use the 6-digit NAICS code with the '/US' suffix.
+# Add or remove sectors from the list as needed.
+scope_2_sectors:
+  - "221100/US"  # Electrical Power Generation, Transmission and Distribution

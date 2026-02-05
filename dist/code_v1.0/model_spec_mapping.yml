@@ -1,0 +1,7 @@
+# Maps Supply Chain Emission Factors (SEF) versions to USEEIO model spec names
+# Extend as needed by adding new key/value pairs under model_name_by_sef_version.
+# Keys must match config.yml's `sef_version` exactly.
+
+model_name_by_sef_version:
+  "v1.3.0": "USEEIOv2.2.22-GHG"
+  "v1.2": "USEEIOv2.1.19-GHG"

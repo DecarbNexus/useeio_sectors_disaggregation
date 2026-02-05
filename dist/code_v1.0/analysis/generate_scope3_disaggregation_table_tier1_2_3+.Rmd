@@ -1,0 +1,806 @@
+---
+title: "Generate Scope 3 disaggregation table (Tier 1/2/3+)"
+author: "Damien Lieber @ DecarbNexus LLC"
+date: "`r Sys.Date()`"
+# No output format on purpose: run via scripts/run_analysis.R or Run All Chunks
+---
+<!--
+BEGINNER NOTES
+- You do not need to edit this file to use the outputs. Most users can just
+  download the Excel/CSVs in the outputs/ folder on GitHub.
+- To reproduce the outputs locally: run `source("scripts/run_analysis.R")` in R,
+  or open this file and use "Run All Chunks" (no Pandoc needed).
+- This document will:
+  1) Install/load required R packages as needed
+  2) Download the correct USEEIO model spec based on config.yml
+  3) Build the model and compute Tier/Scope contributions
+  4) Write Excel and CSV to outputs/
+-->
+
+```{r setup, include=FALSE}
+# Global chunk options: hide code by default to keep the document readable.
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+## 0. Read this first (for beginners)
+
+- You can run this from RStudio or VS Code with: `source("scripts/run_analysis.R")`.
+- The results will be saved to the `outputs/` folder.
+- Configuration lives in `config.yml` (SEF version and which sectors count as Scope 2).
+
+## 1. Introduction
+
+This R Markdown document performs a Structural Path Decomposition (SPD) on a specified USEEIO model. The goal is to disaggregate the total supply chain emission factors for each commodity into:
+
+* **Tiers:** The position in the supply chain (Economic Tier 1 = the commodity itself, Economic Tier 2 = direct suppliers, Economic Tier 3+ = all upstream suppliers).
+* **Scopes:** The GHG accounting category of the emissions (Scope 1 or Scope 2).
+
+The final outputs are an Excel workbook and a CSV, saved in the `outputs/` folder.
+
+## 2. Setup & Configuration
+
+This block handles all setup, including package installation and dynamically fetching model specifications from the official USEPA repository based on the user's selected `sef_version`.
+
+```{r 01-setup-and-load-packages, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 1. Package Management ---
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  yaml,       # For reading configuration files (local and remote)
+  dplyr,      # For data manipulation
+  reshape2,   # For the melt() function
+  knitr,      # For creating nice tables
+  httr,       # For checking URLs before trying to read them
+  openxlsx,   # For writing to Excel files
+  stringr,    # For advanced string manipulation
+  tidyr,      # For separate() function
+  cli         # For concise, readable status messages
+)
+
+# --- 2. Load User Configuration ---
+config <- read_yaml("config.yml")
+cat("User requested Supply Chain Factors (SEF) version:", config$sef_version, "\n")
+
+# --- 3. Fetch Model Specifications from USEPA GitHub Repository ---
+versioning_url <- "https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/Versioning.yml"
+
+# Check if the URL is accessible
+response <- GET(versioning_url)
+if (http_error(response)) {
+  stop("Could not access the Versioning.yml file on GitHub. Please check your internet connection.")
+}
+
+# Read the versioning file directly from the URL's content
+versioning_data <- read_yaml(text = content(response, "text", encoding = "UTF-8"))
+
+# Look up the details for the user-specified SEF version
+version_details <- versioning_data[[config$sef_version]]
+
+# Error handling: Stop if the specified SEF version is not found
+if (is.null(version_details)) {
+  available_versions <- paste(names(versioning_data), collapse = ", ")
+  stop(
+    "The specified sef_version '", config$sef_version, "' was not found in the repository.\n",
+    "Available versions are: ", available_versions
+  )
+}
+
+# --- 4. Install and Load correct `useeior` version ---
+useeior_tag <- versioning_data[[config$sef_version]][["useeior_tag"]]
+useeior_ver <- versioning_data[[config$sef_version]][["useeior_ver"]]
+installed_pkg <- installed.packages()
+if (!"devtools"%in%installed_pkg[, "Package"]) {
+  suppressMessages(install.packages("devtools"))
+}
+if (!"useeior"%in%installed_pkg[, "Package"]) {
+  cli::cli_alert_info("Installing useeior v{useeior_ver} (tag @{useeior_tag}) from GitHub...")
+  suppressMessages(devtools::install_github(paste0("USEPA/useeior@", useeior_tag), quiet = TRUE))
+}
+installed_useeior_ver <- installed_pkg[installed_pkg[, "Package"]=="useeior", "Version"]
+if ("useeior"%in%installed_pkg[, "Package"] && useeior_ver!=installed_useeior_ver) {
+  cli::cli_alert_warning(c("A new version of useeior (v{useeior_ver}) will be installed for generating SEF {SEF_version}. ",
+                           "The useeior v{installed_useeior_ver} you have installed will be overwritten."))
+  cli::cli_alert_info("Installing useeior v{useeior_ver} (tag @{useeior_tag}) from GitHub...")
+  suppressMessages(devtools::install_github(paste0("USEPA/useeior@", useeior_tag), quiet = TRUE))
+}
+
+library(useeior)
+
+cat("Setup complete. Ready to build the model.\n")
+```
+
+## 3. Build USEEIO Model
+
+Now, we build the USEEIO model using the `model_name` and the corresponding remote model specification file fetched in the previous step.
+
+```{r 02-build-model, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 1. Prepare for local model specification file ---
+spec_dir <- "spec_files"
+# Create the directory if it doesn't exist
+if (!dir.exists(spec_dir)) {
+  dir.create(spec_dir)
+}
+# Define the path for the local specification file
+# Resolve model_name dynamically from a local mapping that depends on config$sef_version
+model_map <- tryCatch(read_yaml("model_spec_mapping.yml"), error = function(e) NULL)
+if (!is.null(model_map) && !is.null(model_map$model_name_by_sef_version[[config$sef_version]])) {
+  model_name <- model_map$model_name_by_sef_version[[config$sef_version]]
+} else {
+  # Do not default silently: instruct user to add the mapping explicitly
+  msg <- paste0(
+    "No model mapping found for sef_version '", config$sef_version, "'.\n",
+    "Please add an entry in 'model_spec_mapping.yml' under 'model_name_by_sef_version'.\n",
+    "For example:\n",
+    "  \"", config$sef_version, "\": \"USEEIOvX.Y.Z-GHG\"\n\n",
+    "How to find the correct USEEIO model name: \n",
+    " - Check the SEF release notes and/or Versioning.yml in USEPA/supply-chain-factors.\n",
+    " - URL: https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/Versioning.yml\n",
+    " - Identify the model spec name used for that SEF release (e.g., USEEIOv2.2.22-GHG).\n"
+  )
+  stop(msg)
+}
+local_spec_file <- file.path(spec_dir, paste0(model_name, ".yml"))
+
+# --- 2. Download the spec file if it doesn't exist locally ---
+if (!file.exists(local_spec_file)) {
+
+  model_spec_url <- paste0(
+    "https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/model-specs/",
+    model_name,
+    ".yml"
+  )
+
+  cli::cli_alert_info("Downloading model specification file from: {model_spec_url}")
+  response_spec <- GET(model_spec_url)
+  
+  # Stop with an error if the download fails
+  if (http_error(response_spec)) {
+    stop("Failed to download the model specification file: ", model_name, ".yml")
+  }
+
+  # Write the downloaded content to the local file
+  writeBin(content(response_spec, "raw"), local_spec_file)
+  cli::cli_alert_success("Model specification saved locally: {local_spec_file}")
+} else {
+  cli::cli_alert_info("Using existing local model specification: {local_spec_file}")
+}
+
+# --- 3. Build the model ---
+# We now use the LOCAL file path for the configpaths argument.
+# The `cache=TRUE` option will save time on subsequent runs.
+cli::cli_alert_info("Building USEEIO model: {model_name} (this can take a minute)...")
+model <- buildModel(model_name, configpaths = local_spec_file)
+cli::cli_alert_success("Model built.")
+```
+
+### Model Specifications
+
+It's important to record the key specifications of the model used for this analysis to ensure reproducibility.
+
+```{r 02a-model-specs, echo=FALSE}
+# Extract key specifications from the model object
+model_specs <- data.frame(
+  Specification = c("USEEIO Supply Chain Emission Factors version", "Model Name", "Input-Output Model's Year", "GHG Data Year", "GHG Data File", "GHG Data File Location"),
+  Value = c(
+    config$sef_version,
+    model$specs$Model,
+    model$specs$IOYear,
+    model$specs$SatelliteTable$GHG$DataYears,
+    model$specs$SatelliteTable$GHG$StaticFile,
+    model$specs$SatelliteTable$GHG$FileLocation
+  )
+)
+
+# Print the specifications as a clean table
+print(model_specs)
+```
+
+## 4. Structural Path Decomposition (SPD)
+
+This is the core of the analysis. We extract matrices from the model and partition them by scope before calculating the tier contributions.
+
+### 4.1 Matrices used (D, A, L, I)
+
+- D: Direct impact vector expanded into a diagonal matrix (per-sector direct GHG intensity)
+- A: Direct requirements matrix (technical coefficients)
+- L: Leontief inverse $(I - A)^{-1}$ (total requirements)
+- I: Identity matrix (used for Economic Tier 1 extraction)
+
+```{r 03a-spd-matrices, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 1. Prepare Key Matrices ---
+# D: Direct Impact Matrix, diagonally expanded from the vector in model$D
+D_matrix <- diag(model$D[1, ])
+colnames(D_matrix) <- colnames(model$D)
+rownames(D_matrix) <- colnames(model$D)
+
+# I: Identity Matrix (used for Economic Tier 1 calculation)
+I_matrix <- diag(nrow(D_matrix))
+colnames(I_matrix) <- colnames(D_matrix)
+rownames(I_matrix) <- rownames(D_matrix)
+
+# A: Direct Requirements Matrix
+A_matrix <- model$A
+
+# A^2: squared Direct Requirements Matrix
+A_squared_matrix <- A_matrix %*% A_matrix
+
+# L: Leontief Inverse Matrix
+L_matrix <- model$L
+```
+
+### 4.2 Partition by Scope
+
+We form Scope 1 and Scope 2 partitions for A and L using the Scope 2 sector list from `config.yml`.
+
+```{r 03b-spd-scope-partitions, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 2. Prepare Scope-Specific Matrices ---
+# Partition key matrices into Scope 1 and Scope 2 components
+A_matrix_scope1 <- A_matrix
+A_matrix_scope1[config$scope_2_sectors, ] <- 0
+
+A_matrix_scope2 <- A_matrix
+A_matrix_scope2[!(rownames(A_matrix_scope2) %in% config$scope_2_sectors), ] <- 0
+
+# A^2: squared Direct Requirements Matrix
+A_squared_matrix_scope2 <- A_squared_matrix
+A_squared_matrix_scope2[!(rownames(A_squared_matrix_scope2) %in% config$scope_2_sectors), ] <- 0
+
+# L: Leontief Inverse matrix partitions
+L_matrix_scope1 <- L_matrix
+L_matrix_scope1[config$scope_2_sectors, ] <- 0
+
+L_matrix_scope2 <- L_matrix
+L_matrix_scope2[!(rownames(L_matrix_scope2) %in% config$scope_2_sectors), ] <- 0
+```
+
+### 4.3 Compute totals and tiers
+
+We compute total impacts and then allocate them into Economic Tier 1, Economic Tier 2, and Economic Tier 3+ for each Scope.
+
+```{r 03c-spd-totals-and-tiers, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 3. Calculate Total Impact for Each Scope ---
+# This is used later to calculate the percentage contribution.
+N_Total <- D_matrix %*% L_matrix
+N_Total_scope1 <- D_matrix %*% L_matrix_scope1
+N_Total_scope2 <- D_matrix %*% L_matrix_scope2
+
+# --- 3.1. Economic Tier 1 (Direct Impact: D * I) ---
+N_Tier1_scope1 <- D_matrix %*% I_matrix
+N_Tier1_scope2 <- D_matrix %*% A_matrix_scope2
+N_Tier1 <- N_Tier1_scope1 + N_Tier1_scope2
+
+# --- 3.2. Economic Tier 2 (Direct Suppliers: D * A) ---
+N_Tier2_scope1 <- D_matrix %*% A_matrix_scope1
+N_Tier2_scope2 <- D_matrix %*% A_squared_matrix_scope2
+N_Tier2 <- N_Tier2_scope1 + N_Tier2_scope2
+
+# --- 3.3. Economic Tier 3+ (Residual) ---
+N_Tier3plus_scope1 <- N_Total_scope1 - N_Tier1_scope1 - N_Tier2_scope1
+N_Tier3plus_scope2 <- N_Total_scope2 - N_Tier1_scope2 - N_Tier2_scope2
+N_Tier3plus <- N_Total - N_Tier1 - N_Tier2
+```
+
+### Verification Step
+
+Let's verify that our decomposition is correct. The sum of the tiers should equal the total impact matrix.
+
+```{r 04-verification, echo=FALSE, message=FALSE, warning=FALSE}
+N_Check <- colSums(N_Tier1 + N_Tier2 + N_Tier3plus)
+
+# Calculate the ratio of the summed tiers to the total impact for each commodity
+Ratio_Check <- ifelse(
+  abs(model$N) < 1e-12, 
+  1,
+  N_Check / model$N
+)
+
+# Check if all ratio values are close to 1 (within a tolerance for floating-point arithmetic)
+verification_passed <- all(abs(Ratio_Check - 1) < 1e-9)
+cat(paste("Disaggregation verification successful:", verification_passed, "\n"))
+if (!verification_passed) {
+  warning("Verification failed! The sum of tiers does not equal the total impact.")
+}
+```
+
+## 5. Reshape data and build outputs
+
+We now convert matrices into tidy tables by Economic Tier and Scope for each embedded commodity and assemble the final outputs.
+
+### 5.1 Helper for melting matrices
+
+```{r 05a-helper-melt, echo=FALSE, message=FALSE, warning=FALSE}
+# --- Helper: reshape matrices to long format with labels ---
+melt_and_label <- function(matrix, tier_label, scope_label) {
+  # Melt the matrix to long format with explicit row/col identifiers
+  # Rows = GHG source sectors, Cols = embedded sector/commodity
+  df_long <- reshape2::melt(
+    matrix,
+    varnames = c("Embedded_Sector_Code_for_GHG_sources", "Disaggregated_Commodity_Code"),
+    value.name = "Absolute_Contribution_GHG"
+  )
+
+  # Assign displayed Embedded_Sector_Code per requirement:
+  # - Scope 1: show under the emitting (source) sector
+  # - Scope 2: show under the embedded sector (i.e., the commodity's own sector),
+  #            while preserving the electricity (or other source) in _for_GHG_sources
+  if (scope_label == "Scope 2") {
+    df_long$Embedded_Sector_Code <- df_long$Disaggregated_Commodity_Code
+  } else {
+    df_long$Embedded_Sector_Code <- df_long$Embedded_Sector_Code_for_GHG_sources
+  }
+
+  df_long$Economic_Tier <- tier_label
+  df_long$Scope <- scope_label
+
+  # Keep only non-zero entries to reduce file size and improve readability
+  df_long <- df_long[df_long$Absolute_Contribution_GHG != 0, ]
+  return(df_long)
+}
+```
+
+### 5.2 Economic Tier 1 and Economic Tier 2 (Scope 1) tables
+
+```{r 05b-build-t1-t2-s1, echo=FALSE, message=FALSE, warning=FALSE}
+df_t1_s1 <- melt_and_label(N_Tier1_scope1, "Economic tier 1", "Scope 1")
+df_t1_s2 <- melt_and_label(N_Tier1_scope2, "Economic tier 1", "Scope 2")
+df_t2_s1 <- melt_and_label(N_Tier2_scope1, "Economic tier 2", "Scope 1")
+
+# Reclassify Scope when source and embedded sectors are identical
+df_t1_s2 <- df_t1_s2 %>%
+  dplyr::mutate(
+    Scope = ifelse(Embedded_Sector_Code == Embedded_Sector_Code_for_GHG_sources, "Scope 1", Scope)
+  )
+```
+
+### 5.3 Economic Tier 2 (Scope 2) decomposition via A[j,k]
+
+```{r 05c-build-t2-s2, echo=FALSE, message=FALSE, warning=FALSE}
+# M1: contributions from GHG source i to intermediate supplier j (i -> j)
+M1 <- D_matrix %*% A_matrix_scope2
+
+# Long form: (Embedded_Sector_Code_for_GHG_sources = i, Embedded_Sector_Code = j, v1)
+df_scope2_step1 <- reshape2::melt(
+  M1,
+  varnames = c("Embedded_Sector_Code_for_GHG_sources", "Embedded_Sector_Code"),
+  value.name = "v1"
+) %>%
+  dplyr::filter(v1 != 0)
+
+# Long form of A: (Embedded_Sector_Code = j, Disaggregated_Commodity_Code = k, a_jk)
+df_A_jk <- reshape2::melt(
+  A_matrix,
+  varnames = c("Embedded_Sector_Code", "Disaggregated_Commodity_Code"),
+  value.name = "a_jk"
+) %>%
+  dplyr::filter(a_jk != 0)
+
+# Join on j to compute i -> j -> k contributions and label as Economic Tier 2, Scope 2
+df_t2_s2 <- df_scope2_step1 %>%
+  dplyr::inner_join(df_A_jk, by = "Embedded_Sector_Code") %>%
+  dplyr::mutate(
+    Absolute_Contribution_GHG = v1 * a_jk,
+    Economic_Tier = "Economic tier 2",
+    Scope = "Scope 2"
+  ) %>%
+  dplyr::select(
+    Disaggregated_Commodity_Code,
+    Embedded_Sector_Code,
+    Embedded_Sector_Code_for_GHG_sources,
+    Economic_Tier, Scope,
+    Absolute_Contribution_GHG
+  ) %>%
+  dplyr::filter(Absolute_Contribution_GHG != 0)
+```
+
+### 5.4 Economic Tier 3+ decomposition (Scope 1 and 2)
+
+```{r 05d-build-t3plus, echo=FALSE, message=FALSE, warning=FALSE}
+df_t3plus_s1 <- melt_and_label(N_Tier3plus_scope1, "Economic tier 3+", "Scope 1")
+
+# R2plus: captures contribution shares for paths of length >= 2 from j to k
+R2plus_matrix <- L_matrix - I_matrix - A_matrix
+
+df_R2plus_jk <- reshape2::melt(
+  R2plus_matrix,
+  varnames = c("Embedded_Sector_Code", "Disaggregated_Commodity_Code"),
+  value.name = "r2plus"
+) %>%
+  dplyr::filter(r2plus != 0)
+
+# Multiply i->j (v1) by r2plus (j->k via paths length>=2) and label Economic Tier 3+
+df_t3plus_s2 <- df_scope2_step1 %>%
+  dplyr::inner_join(df_R2plus_jk, by = "Embedded_Sector_Code") %>%
+  dplyr::mutate(
+    Absolute_Contribution_GHG = v1 * r2plus,
+    Economic_Tier = "Economic tier 3+",
+    Scope = "Scope 2"
+  ) %>%
+  dplyr::select(
+    Disaggregated_Commodity_Code,
+    Embedded_Sector_Code,
+    Embedded_Sector_Code_for_GHG_sources,
+    Economic_Tier, Scope,
+    Absolute_Contribution_GHG
+  ) %>%
+  dplyr::filter(Absolute_Contribution_GHG != 0)
+```
+
+### 5.5 Scope reclassification (same source and embedded sector)
+
+```{r 05e-scope-reclass, echo=FALSE, message=FALSE, warning=FALSE}
+# Reclassify Scope when source and embedded sectors are identical (e.g., the electricity demand of the power sector (T&D losses etc.) is the power sector's scope 1, not 2
+df_t2_s2 <- df_t2_s2 %>%
+  dplyr::mutate(
+    Scope = ifelse(Embedded_Sector_Code == Embedded_Sector_Code_for_GHG_sources, "Scope 1", Scope)
+  )
+
+df_t3plus_s2 <- df_t3plus_s2 %>%
+  dplyr::mutate(
+    Scope = ifelse(Embedded_Sector_Code == Embedded_Sector_Code_for_GHG_sources, "Scope 1", Scope)
+  )
+```
+
+### 5.6 Build final_table_by_code
+
+```{r 05f-final-table-by-code, echo=FALSE, message=FALSE, warning=FALSE}
+# Clean codes, filter Scope 2 commodities from config, aggregate and compute shares
+abs_col_name <- paste0(
+  "Absolute contribution (kgCO2e/USD_PRO_",
+  model$specs$IOYear,
+  " spent on embedded commodity)"
+)
+## Clean scope-2 codes (remove any trailing /US) so we can filter them from Disaggregated_Commodity_Code
+scope2_codes_clean <- stringr::str_replace(config$scope_2_sectors, "/US$", "")
+
+final_table_by_code <- bind_rows(
+    df_t1_s1, df_t1_s2, df_t2_s1, df_t2_s2, df_t3plus_s1, df_t3plus_s2
+  ) %>%
+  mutate(
+    Disaggregated_Commodity_Code = stringr::str_replace(Disaggregated_Commodity_Code, "/US$", ""),
+    Embedded_Sector_Code    = stringr::str_replace(Embedded_Sector_Code, "/US$", ""),
+    Embedded_Sector_Code_for_GHG_sources = stringr::str_replace(Embedded_Sector_Code_for_GHG_sources, "/US$", "")
+  ) %>%
+  # Filter out commodities that are themselves Scope 2 sectors as specified in config.yml
+  dplyr::filter(!(Disaggregated_Commodity_Code %in% scope2_codes_clean)) %>%
+  group_by(Disaggregated_Commodity_Code) %>%
+  mutate(
+    Total_Commodity_GHG = sum(Absolute_Contribution_GHG),
+    Relative_Contribution = (Absolute_Contribution_GHG / Total_Commodity_GHG)
+  ) %>%
+  ungroup() %>%
+  select(
+    Disaggregated_Commodity_Code,
+    Embedded_Sector_Code,
+    Embedded_Sector_Code_for_GHG_sources,
+    Economic_Tier,
+    Scope,
+    Absolute_Contribution_GHG,
+    Relative_Contribution
+  ) %>%
+  arrange(Disaggregated_Commodity_Code, Economic_Tier, desc(Absolute_Contribution_GHG))
+```
+
+```{r 05b-post-aggregation-verification, echo=FALSE, message=FALSE, warning=FALSE}
+# Verify that the aggregated contributions sum back to N totals within tolerance
+tol <- 1e-9
+
+cat("\n--- Post-aggregation verification steps ---\n")
+
+# Target totals per commodity from N_Total (column sums)
+n_total_cols_clean <- stringr::str_replace(colnames(N_Total), "/US$", "")
+target_totals <- data.frame(
+  Disaggregated_Commodity_Code = n_total_cols_clean,
+  N_Total = colSums(N_Total),
+  stringsAsFactors = FALSE
+)
+
+# Aggregated totals from final_table_by_code
+agg_totals <- final_table_by_code %>%
+  dplyr::group_by(Disaggregated_Commodity_Code) %>%
+  dplyr::summarise(Sum_From_Table = sum(Absolute_Contribution_GHG), .groups = "drop")
+
+merged_check <- agg_totals %>% dplyr::inner_join(target_totals, by = "Disaggregated_Commodity_Code") %>%
+  dplyr::mutate(
+    abs_diff = abs(Sum_From_Table - N_Total),
+    rel_diff = ifelse(abs(N_Total) < tol, abs_diff, abs_diff / pmax(abs(N_Total), tol)),
+    pass = abs_diff <= tol | rel_diff <= tol
+  )
+
+overall_pass <- all(merged_check$pass)
+cat("Step 1: Compare per-commodity sums from table vs. N_Total column sums\n")
+cat(" - Commodities checked:", nrow(merged_check), "\n")
+cat(" - PASS:", overall_pass, "\n")
+
+if (!overall_pass) {
+  # Determine columns (commodities) to include in secondary checks (those present in the table)
+  keep_cols <- which(n_total_cols_clean %in% merged_check$Disaggregated_Commodity_Code)
+
+  # Secondary checks by Scope totals across all kept commodities
+  scope1_target_total <- sum(N_Total_scope1[, keep_cols, drop = FALSE])
+  scope2_target_total <- sum(N_Total_scope2[, keep_cols, drop = FALSE])
+  scope1_table_total  <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Scope == "Scope 1"]) 
+  scope2_table_total  <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Scope == "Scope 2"]) 
+
+  cat("Step 2: Check totals by Scope across kept commodities\n")
+  cat(sprintf(" - Scope 1: table=%.12g target=%.12g abs_diff=%.12g\n", scope1_table_total, scope1_target_total, abs(scope1_table_total - scope1_target_total)))
+  cat(sprintf(" - Scope 2: table=%.12g target=%.12g abs_diff=%.12g\n", scope2_table_total, scope2_target_total, abs(scope2_table_total - scope2_target_total)))
+
+  # Tertiary checks by Tier x Scope across all kept commodities
+  t1s1_target <- sum(N_Tier1_scope1[, keep_cols, drop = FALSE])
+  t1s2_target <- sum(N_Tier1_scope2[, keep_cols, drop = FALSE])
+  t2s1_target <- sum(N_Tier2_scope1[, keep_cols, drop = FALSE])
+  t2s2_target <- sum(N_Tier2_scope2[, keep_cols, drop = FALSE])
+  t3s1_target <- sum(N_Tier3plus_scope1[, keep_cols, drop = FALSE])
+  t3s2_target <- sum(N_Tier3plus_scope2[, keep_cols, drop = FALSE])
+
+  t1s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 1" & final_table_by_code$Scope == "Scope 1"]) 
+  t1s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 1" & final_table_by_code$Scope == "Scope 2"]) 
+  t2s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 2" & final_table_by_code$Scope == "Scope 1"]) 
+  t2s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 2" & final_table_by_code$Scope == "Scope 2"]) 
+  t3s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 3+" & final_table_by_code$Scope == "Scope 1"]) 
+  t3s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 3+" & final_table_by_code$Scope == "Scope 2"]) 
+
+  cat("Step 3: Check totals by Tier x Scope across kept commodities\n")
+  cat(sprintf(" - Tier1 Scope1: table=%.12g target=%.12g abs_diff=%.12g\n", t1s1_table, t1s1_target, abs(t1s1_table - t1s1_target)))
+  cat(sprintf(" - Tier1 Scope2: table=%.12g target=%.12g abs_diff=%.12g\n", t1s2_table, t1s2_target, abs(t1s2_table - t1s2_target)))
+  cat(sprintf(" - Tier2 Scope1: table=%.12g target=%.12g abs_diff=%.12g\n", t2s1_table, t2s1_target, abs(t2s1_table - t2s1_target)))
+  cat(sprintf(" - Tier2 Scope2: table=%.12g target=%.12g abs_diff=%.12g\n", t2s2_table, t2s2_target, abs(t2s2_table - t2s2_target)))
+  cat(sprintf(" - Tier3+ Scope1: table=%.12g target=%.12g abs_diff=%.12g\n", t3s1_table, t3s1_target, abs(t3s1_table - t3s1_target)))
+  cat(sprintf(" - Tier3+ Scope2: table=%.12g target=%.12g abs_diff=%.12g\n", t3s2_table, t3s2_target, abs(t3s2_table - t3s2_target)))
+
+  # Show a few worst commodity mismatches to aid debugging
+  worst <- merged_check %>% dplyr::arrange(dplyr::desc(abs_diff)) %>% utils::head(5)
+  cat("Top 5 commodity mismatches (table vs. N_Total):\n")
+  print(worst)
+}
+cat("--- End verification ---\n\n")
+```
+
+```{r supporting-tables, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 4. Create Supporting Tables for Excel Export ---
+
+# Lightweight progress logger
+log_step <- function(msg){
+  cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), msg))
+  utils::flush.console()
+}
+
+log_step("Building supporting tables (names, electricity-only views, sector classification)...")
+
+# Table with Names instead of Codes
+industry_mapping <- model$Industries %>% select(Code, Name)
+commodity_mapping <- model$Commodities %>% select(Code, Name)
+
+final_table_by_name <- final_table_by_code %>%
+  left_join(commodity_mapping, by = c("Disaggregated_Commodity_Code" = "Code")) %>%
+  rename(Disaggregated_Commodity_Name = Name) %>%
+  left_join(industry_mapping, by = c("Embedded_Sector_Code" = "Code")) %>%
+  rename(Embedded_Sector_Name = Name) %>%
+  left_join(industry_mapping, by = c("Embedded_Sector_Code_for_GHG_sources" = "Code")) %>%
+  rename(Embedded_Sector_Name_for_GHG_sources = Name) %>%
+  select(
+    Disaggregated_Commodity_Code,
+    Disaggregated_Commodity_Name,
+    Embedded_Sector_Code,
+    Embedded_Sector_Code_for_GHG_sources,
+    Embedded_Sector_Name,
+    Embedded_Sector_Name_for_GHG_sources,
+    Economic_Tier,
+    Scope,
+    Absolute_Contribution_GHG,
+    Relative_Contribution
+  )
+
+log_step(sprintf("final_table_by_name ready (%s rows)", format(nrow(final_table_by_name), big.mark=",")))
+
+# Electricity-only filtered views (by GHG source sector)
+# Use fixed code for electricity as requested
+electricity_codes <- c("221100")
+electric_only_by_code <- final_table_by_code %>%
+  dplyr::filter(Embedded_Sector_Code_for_GHG_sources %in% electricity_codes)
+electric_only_by_name <- final_table_by_name %>%
+  dplyr::filter(Embedded_Sector_Code_for_GHG_sources %in% electricity_codes)
+
+log_step(sprintf("Electricity-only tables ready (code rows: %s, name rows: %s)",
+                 format(nrow(electric_only_by_code), big.mark=","),
+                 format(nrow(electric_only_by_name), big.mark=",")))
+
+# Table with Industry Details
+sector_classification <- model$Industries %>%
+  select(Code, `Industry name` = Name) %>%
+  left_join(
+    model$Commodities %>% select(Code, `Commodity name` = Name, Category, Subcategory, Description),
+    by = "Code"
+  ) %>%
+  # Separate Category into Code and Name
+  tidyr::separate(Category, into = c("Category Code", "Category Name"), sep = ": ", extra = "merge", fill = "right", remove = TRUE) %>%
+  # Separate Subcategory into Code and Name
+  tidyr::separate(Subcategory, into = c("Subcategory Code", "Subcategory Name"), sep = ": ", extra = "merge", fill = "right", remove = TRUE) %>%
+  mutate(
+    # Use a single regex to remove multiple possible prefixes
+    Description = stringr::str_remove(Description, "^(BEA Code & Name is '?\\w+:.*?'?\\.\\s*)")
+    ) %>%
+  # Select and reorder the final columns for the Excel sheet
+  select(
+    `Category Code`,
+    `Category Name`,
+    `Subcategory Code`,
+    `Subcategory Name`,
+    `Sector code` = Code,
+    `Sector name` = `Industry name`,
+    `Commodity name`,
+    Description
+  )
+
+log_step(sprintf("sector_classification ready (%s rows)", format(nrow(sector_classification), big.mark=",")))
+
+```
+
+```{r write-tables, echo=FALSE, message=FALSE, warning=FALSE}
+# --- 5. Write all tables to a single Excel file ---
+# Create a clean base filename from the model specs and ensure an outputs directory exists
+outputs_dir <- "outputs"
+if (!dir.exists(outputs_dir)) dir.create(outputs_dir, recursive = TRUE)
+
+file_basename <- paste(
+  "SEF",
+  config$sef_version,
+  "_disaggregation_factors_",
+  paste0("GHG", model_specs[model_specs$Specification == "GHG Data Year", "Value"]),
+  sep = "_",
+  paste0("IO", model_specs[model_specs$Specification == "Input-Output Model's Year", "Value"])
+)
+
+excel_filename <- file.path(outputs_dir, paste0(file_basename, ".xlsx"))
+csv_filename   <- file.path(outputs_dir, paste0(file_basename, ".csv"))
+csv_elec_filename <- file.path(outputs_dir, paste0(file_basename, "_electricity_only.csv"))
+csv_sc_filename   <- file.path(outputs_dir, "sector_classification.csv")
+
+wb <- createWorkbook()
+
+log_step("Creating Excel workbook and writing sheets...")
+
+# --- Create and Add Author Info Tab (as the first sheet) ---
+author_info <- data.frame(
+  Field = c(
+    "Author",
+    "Organization",
+    "Website",
+    "Contact",
+    "Open-source repository",
+    "Q&A + Discussion",
+    "Data License",
+    "License URL"
+  ),
+  Value = c(
+    "Damien Lieber",
+    "DecarbNexus LLC",
+    "decarbnexus.com",
+    "contact@decarbnexus.com",
+    "https://github.com/DecarbNexus/useeio_sectors_disaggregation",
+    "https://github.com/DecarbNexus/useeio_sectors_disaggregation/discussions",
+    "CC BY 4.0 (see LICENSE-DATA.md)",
+    "https://creativecommons.org/licenses/by/4.0/"
+  ),
+  stringsAsFactors = FALSE
+)
+addWorksheet(wb, "Author_Info")
+writeData(wb, "Author_Info", author_info)
+log_step("Wrote sheet: Author_Info")
+
+addWorksheet(wb, "Model_Specs")
+writeData(wb, "Model_Specs", model_specs)
+log_step("Wrote sheet: Model_Specs")
+
+addWorksheet(wb, "Contributions_by_Name")
+writeData(wb, "Contributions_by_Name", final_table_by_name %>%
+  rename(!!abs_col_name := Absolute_Contribution_GHG))
+log_step(sprintf("Wrote sheet: Contributions_by_Name (%s rows)", format(nrow(final_table_by_name), big.mark=",")))
+
+addWorksheet(wb, "Contributions_by_Code")
+writeData(wb, "Contributions_by_Code", final_table_by_code %>%
+  rename(!!abs_col_name := Absolute_Contribution_GHG))
+log_step(sprintf("Wrote sheet: Contributions_by_Code (%s rows)", format(nrow(final_table_by_code), big.mark=",")))
+
+addWorksheet(wb, "Electricity_only")
+writeData(wb, "Electricity_only", electric_only_by_name %>%
+  rename(!!abs_col_name := Absolute_Contribution_GHG))
+log_step(sprintf("Wrote sheet: Electricity_only (%s rows)", format(nrow(electric_only_by_name), big.mark=",")))
+
+addWorksheet(wb, "sector_classification")
+writeData(wb, "sector_classification", sector_classification)
+log_step(sprintf("Wrote sheet: sector_classification (%s rows)", format(nrow(sector_classification), big.mark=",")))
+
+addWorksheet(wb, "NAICS_to_USEEIO_crosswalk")
+writeData(wb, "NAICS_to_USEEIO_crosswalk", model$crosswalk)
+log_step(sprintf("Wrote sheet: NAICS_to_USEEIO_crosswalk (%s rows)", format(nrow(model$crosswalk), big.mark=",")))
+
+# Matrices: Direct impact (D), Direct requirements (A), Leontief inverse (L)
+addWorksheet(wb, "Direct GHG impacts (d_GHG)")
+writeData(wb, "Direct GHG impacts (d_GHG)", t(model$D), rowNames = TRUE)
+log_step("Wrote sheet: Direct GHG impacts (d_GHG)")
+
+#addWorksheet(wb, "Diagonalized d_GHG (D_GHG)")
+#writeData(wb, "Diagonalized d_GHG (D_GHG)", D_matrix, rowNames = TRUE)
+#log_step("Wrote sheet: Diagonalized d_GHG (D_GHG)")
+
+addWorksheet(wb, "Direct requirements matrix (A)")
+writeData(wb, "Direct requirements matrix (A)", A_matrix, rowNames = TRUE)
+log_step("Wrote sheet: Direct requirements matrix (A)")
+
+addWorksheet(wb, "Leontief inverse (L)")
+writeData(wb, "Leontief inverse (L)", L_matrix, rowNames = TRUE)
+log_step("Wrote sheet: Leontief inverse (L)")
+
+saveWorkbook(wb, excel_filename, overwrite = TRUE)
+log_step(sprintf("Saved Excel: %s", excel_filename))
+
+# Use the cleaned table for the CSV export
+write.csv(final_table_by_code %>%
+  rename(!!abs_col_name := Absolute_Contribution_GHG), csv_filename, row.names = FALSE, na = "")
+log_step(sprintf("Wrote CSV: %s", csv_filename))
+
+# Write a short data license notice into outputs/
+data_license_text <- c(
+  "Data License: CC BY 4.0",
+  "Full license: https://creativecommons.org/licenses/by/4.0/",
+  "If you use these datasets, cite DecarbNexus LLC and acknowledge USEPA USEEIO/SEF sources:",
+  " - USEEIO: https://github.com/USEPA/useeior",
+  " - Supply Chain Emission Factors: https://github.com/USEPA/supply-chain-factors"
+)
+writeLines(data_license_text, file.path(outputs_dir, "DATA_LICENSE.txt"))
+log_step("Wrote file: outputs/DATA_LICENSE.txt")
+
+# Electricity-only CSV export
+write.csv(electric_only_by_code %>%
+  rename(!!abs_col_name := Absolute_Contribution_GHG), csv_elec_filename, row.names = FALSE, na = "")
+log_step(sprintf("Wrote CSV: %s", csv_elec_filename))
+
+# Export sector classification as CSV
+write.csv(
+  sector_classification,
+  csv_sc_filename,
+  row.names = FALSE,
+  na = ""
+)
+log_step(sprintf("Wrote CSV: %s", csv_sc_filename))
+
+cat("Saved Excel:", excel_filename, "\n")
+cat("Saved Contributions CSVs:  ", csv_filename, "\n")
+cat("Saved Electricity-only CSV: ", csv_elec_filename, "\n")
+cat("Saved Sector Classification CSV:  ", csv_sc_filename, "\n")
+```
+
+## 6. Preview of Final Results
+
+Here is a preview of the top 5 rows from the final contribution factor table (with codes). The full results, including the version with names, are in the Excel file.
+
+```{r 06-preview-results, echo=FALSE, message=FALSE, warning=FALSE}
+# Preview with helpful context and an attempt to show all columns
+cat("\n--- Preview of Final Results ---\n")
+cat("Showing top 5 rows. Attempting to display all columns; if your console truncates, a compact view follows.\n\n")
+
+# Try printing all columns (tibble-friendly); fall back to base data.frame
+printed_full <- FALSE
+try({
+  if (requireNamespace("tibble", quietly = TRUE)) {
+    print(tibble::as_tibble(final_table_by_name) |> utils::head(5), n = 5, width = Inf)
+    printed_full <- TRUE
+  }
+}, silent = TRUE)
+
+if (!printed_full) {
+  print(utils::head(as.data.frame(final_table_by_name), 5), row.names = FALSE)
+}
+
+# Compact view with key columns (for narrow terminals)
+key_cols <- c("Disaggregated_Commodity_Code", "Embedded_Sector_Code", "Economic_Tier", "Scope", "Relative_Contribution")
+missing_cols <- setdiff(key_cols, names(final_table_by_name))
+if (length(missing_cols) == 0) {
+  cat("\nCompact view (key columns):\n")
+  print(utils::head(final_table_by_name[ , key_cols, drop = FALSE], 5), row.names = FALSE)
+} else {
+  cat("\nNote: Some key columns were not found:", paste(missing_cols, collapse = ", "), "\n")
+}
+
+cat("--- End Preview ---\n\n")
+```

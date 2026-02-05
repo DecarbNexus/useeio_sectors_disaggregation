@@ -1,0 +1,39 @@
+:root{
+	--bg:#111111;           /* global background */
+	--panel:#111111;        /* figure and chart background */
+	--control:#1a1a1a;      /* inputs/buttons background */
+	--text:#e9eef0;
+	--muted:#9fb2bb;
+	--accent:#00D9EA;       /* titles, emphasis, links */
+	--btn:#1f2c31;
+	--btn-text:#e9eef0;
+	--border:#2a2a2a;
+	--tier1:#0099CC;
+	--tier2:#9C27B0;
+	--tier3:#20576E;
+}
+
+html,body{height:100%}
+body{font-family:'Lato',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:0 1rem 2rem;color:var(--text);background:var(--bg)}
+header{max-width:1100px;margin:1rem auto}
+header h1{color:var(--accent);font-weight:700;margin:.5rem 0}
+.note a, a{color:var(--accent);text-decoration:underline}
+.note a:hover, a:hover{filter:brightness(1.1)}
+.controls{max-width:1100px;margin:0.5rem auto;display:flex;flex-direction:column;gap:.6rem}
+.control-row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;width:100%}
+.figure-meta{max-width:1100px;margin:0.5rem auto}
+.figure-title{color:var(--accent);font-size:1.05rem;font-weight:700;margin:0.25rem 0 0.5rem}
+.legend{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.5rem;color:var(--muted)}
+.legend .item{display:flex;align-items:center;gap:.4rem}
+.legend .swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
+main{max-width:1100px;margin:0 auto}
+#chart{display:flex;justify-content:center;align-items:center;min-height:520px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+.note{color:var(--muted)}
+.tooltip{position:absolute;background:#171717;color:#dff6fb;padding:.45rem .6rem;border:1px solid var(--border);border-radius:4px;pointer-events:none;font-size:.85rem}
+select,button,input{padding:.35rem .5rem;border:1px solid var(--border);border-radius:4px;background:var(--control);color:var(--text)}
+button{background:var(--btn);color:var(--btn-text);border-color:var(--border)}
+button:hover{filter:brightness(1.1)}
+code{color:var(--accent)}
+footer{max-width:1100px;margin:1rem auto 0; text-align:center; color:var(--muted)}
+/* Lightweight loading indicator */
+.loading{color:var(--muted); text-align:center; padding:.5rem 0}

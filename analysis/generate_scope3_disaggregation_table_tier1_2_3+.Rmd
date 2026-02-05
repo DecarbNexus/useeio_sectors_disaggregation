@@ -276,7 +276,9 @@ N_Tier2_scope2 <- D_matrix %*% A_squared_matrix_scope2
 N_Tier2 <- N_Tier2_scope1 + N_Tier2_scope2
 
 # --- 3.3. Economic Tier 3+ (Residual) ---
-N_Tier3plus_scope1 <- N_Total_scope1 - N_Tier1_scope1 - N_Tier2_scope1
+N_Tier1_scope1_filtered <- N_Tier1_scope1
+N_Tier1_scope1_filtered[rownames(N_Tier1_scope1) %in% config$scope_2_sectors, ] <- 0
+N_Tier3plus_scope1 <- N_Total_scope1 - N_Tier1_scope1_filtered - N_Tier2_scope1
 N_Tier3plus_scope2 <- N_Total_scope2 - N_Tier1_scope2 - N_Tier2_scope2
 N_Tier3plus <- N_Total - N_Tier1 - N_Tier2
 ```
@@ -345,12 +347,6 @@ melt_and_label <- function(matrix, tier_label, scope_label) {
 df_t1_s1 <- melt_and_label(N_Tier1_scope1, "Economic tier 1", "Scope 1")
 df_t1_s2 <- melt_and_label(N_Tier1_scope2, "Economic tier 1", "Scope 2")
 df_t2_s1 <- melt_and_label(N_Tier2_scope1, "Economic tier 2", "Scope 1")
-
-# Reclassify Scope when source and embedded sectors are identical
-df_t1_s2 <- df_t1_s2 %>%
-  dplyr::mutate(
-    Scope = ifelse(Embedded_Sector_Code == Embedded_Sector_Code_for_GHG_sources, "Scope 1", Scope)
-  )
 ```
 
 ### 5.3 Economic Tier 2 (Scope 2) decomposition via A[j,k]
@@ -426,10 +422,15 @@ df_t3plus_s2 <- df_scope2_step1 %>%
   dplyr::filter(Absolute_Contribution_GHG != 0)
 ```
 
-### 5.5 Scope reclassification (same source and embedded sector)
+### 5.5a Scope reclassification if scope sector = embedded sector
 
 ```{r 05e-scope-reclass, echo=FALSE, message=FALSE, warning=FALSE}
 # Reclassify Scope when source and embedded sectors are identical (e.g., the electricity demand of the power sector (T&D losses etc.) is the power sector's scope 1, not 2
+df_t1_s2 <- df_t1_s2 %>%
+  dplyr::mutate(
+    Scope = ifelse(Embedded_Sector_Code == Embedded_Sector_Code_for_GHG_sources, "Scope 1", Scope)
+  )
+
 df_t2_s2 <- df_t2_s2 %>%
   dplyr::mutate(
     Scope = ifelse(Embedded_Sector_Code == Embedded_Sector_Code_for_GHG_sources, "Scope 1", Scope)
@@ -441,6 +442,40 @@ df_t3plus_s2 <- df_t3plus_s2 %>%
   )
 ```
 
+### 5.5c Create 221100-upstream (electricity upstream emissions)
+
+```{r 05e-electricity-upstream, echo=FALSE, message=FALSE, warning=FALSE}
+# Create a special commodity "221100-upstream_with_losses" representing upstream emissions
+# of the electricity sector including losses (all tiers/scopes EXCEPT Tier 1 Scope 1 direct emissions)
+electricity_upstream_with_losses <- bind_rows(
+  df_t1_s2, df_t2_s1, df_t2_s2, df_t3plus_s1, df_t3plus_s2
+) %>%
+  # Filter for electricity commodity only
+  filter(Disaggregated_Commodity_Code == "221100/US") %>%
+  # Clean the /US suffix before filtering
+  mutate(
+    Disaggregated_Commodity_Code = stringr::str_replace(Disaggregated_Commodity_Code, "/US$", ""),
+    Embedded_Sector_Code = stringr::str_replace(Embedded_Sector_Code, "/US$", ""),
+    Embedded_Sector_Code_for_GHG_sources = stringr::str_replace(Embedded_Sector_Code_for_GHG_sources, "/US$", "")
+  ) %>%
+  # Change the commodity code to 221100-upstream_with_losses
+  mutate(Disaggregated_Commodity_Code = "221100-upstream_with_losses")
+
+electricity_upstream_without_losses <- bind_rows(
+  df_t2_s1, df_t2_s2, df_t3plus_s1, df_t3plus_s2
+) %>%
+  # Filter for electricity commodity only
+  filter(Disaggregated_Commodity_Code == "221100/US") %>%
+  # Clean the /US suffix before filtering
+  mutate(
+    Disaggregated_Commodity_Code = stringr::str_replace(Disaggregated_Commodity_Code, "/US$", ""),
+    Embedded_Sector_Code = stringr::str_replace(Embedded_Sector_Code, "/US$", ""),
+    Embedded_Sector_Code_for_GHG_sources = stringr::str_replace(Embedded_Sector_Code_for_GHG_sources, "/US$", "")
+  ) %>%
+  # Change the commodity code to 221100-upstream_without_losses
+  mutate(Disaggregated_Commodity_Code = "221100-upstream_without_losses")
+```
+
 ### 5.6 Build final_table_by_code
 
 ```{r 05f-final-table-by-code, echo=FALSE, message=FALSE, warning=FALSE}
@@ -450,19 +485,16 @@ abs_col_name <- paste0(
   model$specs$IOYear,
   " spent on embedded commodity)"
 )
-## Clean scope-2 codes (remove any trailing /US) so we can filter them from Disaggregated_Commodity_Code
-scope2_codes_clean <- stringr::str_replace(config$scope_2_sectors, "/US$", "")
 
 final_table_by_code <- bind_rows(
-    df_t1_s1, df_t1_s2, df_t2_s1, df_t2_s2, df_t3plus_s1, df_t3plus_s2
+    df_t1_s1, df_t1_s2, df_t2_s1, df_t2_s2, df_t3plus_s1, df_t3plus_s2,
+    electricity_upstream_with_losses, electricity_upstream_without_losses  # Add the 221100-upstream commodities
   ) %>%
   mutate(
     Disaggregated_Commodity_Code = stringr::str_replace(Disaggregated_Commodity_Code, "/US$", ""),
     Embedded_Sector_Code    = stringr::str_replace(Embedded_Sector_Code, "/US$", ""),
     Embedded_Sector_Code_for_GHG_sources = stringr::str_replace(Embedded_Sector_Code_for_GHG_sources, "/US$", "")
   ) %>%
-  # Filter out commodities that are themselves Scope 2 sectors as specified in config.yml
-  dplyr::filter(!(Disaggregated_Commodity_Code %in% scope2_codes_clean)) %>%
   group_by(Disaggregated_Commodity_Code) %>%
   mutate(
     Total_Commodity_GHG = sum(Absolute_Contribution_GHG),
@@ -495,7 +527,10 @@ target_totals <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Aggregated totals from final_table_by_code
+# Aggregated totals from final_table_by_code (exclude derived commodities like 221100-upstream, and exclude scope 2 commodities)
+## Clean scope-2 codes (remove any trailing /US) so we can filter them from verification
+scope2_codes_clean <- stringr::str_replace(config$scope_2_sectors, "/US$", "")
+
 agg_totals <- final_table_by_code %>%
   dplyr::group_by(Disaggregated_Commodity_Code) %>%
   dplyr::summarise(Sum_From_Table = sum(Absolute_Contribution_GHG), .groups = "drop")
@@ -516,11 +551,17 @@ if (!overall_pass) {
   # Determine columns (commodities) to include in secondary checks (those present in the table)
   keep_cols <- which(n_total_cols_clean %in% merged_check$Disaggregated_Commodity_Code)
 
-  # Secondary checks by Scope totals across all kept commodities
+  # Secondary checks by Scope totals across all kept commodities (exclude derived commodities)
   scope1_target_total <- sum(N_Total_scope1[, keep_cols, drop = FALSE])
   scope2_target_total <- sum(N_Total_scope2[, keep_cols, drop = FALSE])
-  scope1_table_total  <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Scope == "Scope 1"]) 
-  scope2_table_total  <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Scope == "Scope 2"]) 
+  scope1_table_total  <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Scope == "Scope 1" & 
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
+  scope2_table_total  <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Scope == "Scope 2" & 
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
 
   cat("Step 2: Check totals by Scope across kept commodities\n")
   cat(sprintf(" - Scope 1: table=%.12g target=%.12g abs_diff=%.12g\n", scope1_table_total, scope1_target_total, abs(scope1_table_total - scope1_target_total)))
@@ -534,12 +575,36 @@ if (!overall_pass) {
   t3s1_target <- sum(N_Tier3plus_scope1[, keep_cols, drop = FALSE])
   t3s2_target <- sum(N_Tier3plus_scope2[, keep_cols, drop = FALSE])
 
-  t1s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 1" & final_table_by_code$Scope == "Scope 1"]) 
-  t1s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 1" & final_table_by_code$Scope == "Scope 2"]) 
-  t2s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 2" & final_table_by_code$Scope == "Scope 1"]) 
-  t2s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 2" & final_table_by_code$Scope == "Scope 2"]) 
-  t3s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 3+" & final_table_by_code$Scope == "Scope 1"]) 
-  t3s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[final_table_by_code$Economic_Tier == "Economic tier 3+" & final_table_by_code$Scope == "Scope 2"]) 
+  t1s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Economic_Tier == "Economic tier 1" & 
+    final_table_by_code$Scope == "Scope 1" &
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
+  t1s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Economic_Tier == "Economic tier 1" & 
+    final_table_by_code$Scope == "Scope 2" &
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
+  t2s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Economic_Tier == "Economic tier 2" & 
+    final_table_by_code$Scope == "Scope 1" &
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
+  t2s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Economic_Tier == "Economic tier 2" & 
+    final_table_by_code$Scope == "Scope 2" &
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
+  t3s1_table <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Economic_Tier == "Economic tier 3+" & 
+    final_table_by_code$Scope == "Scope 1" &
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
+  t3s2_table <- sum(final_table_by_code$Absolute_Contribution_GHG[
+    final_table_by_code$Economic_Tier == "Economic tier 3+" & 
+    final_table_by_code$Scope == "Scope 2" &
+    !final_table_by_code$Disaggregated_Commodity_Code %in% c("221100-upstream")
+  ]) 
 
   cat("Step 3: Check totals by Tier x Scope across kept commodities\n")
   cat(sprintf(" - Tier1 Scope1: table=%.12g target=%.12g abs_diff=%.12g\n", t1s1_table, t1s1_target, abs(t1s1_table - t1s1_target)))
@@ -554,6 +619,31 @@ if (!overall_pass) {
   cat("Top 5 commodity mismatches (table vs. N_Total):\n")
   print(worst)
 }
+
+# Additional check: Verify Scope 2 sectors match N_Total
+if (length(scope2_codes_clean) > 0) {
+  cat("\nStep 4: Verify Scope 2 sectors match N_Total\n")
+  scope2_totals <- final_table_by_code %>%
+    dplyr::filter(Disaggregated_Commodity_Code %in% scope2_codes_clean) %>%
+    dplyr::group_by(Disaggregated_Commodity_Code) %>%
+    dplyr::summarise(Sum_From_Table = sum(Absolute_Contribution_GHG), .groups = "drop") %>%
+    dplyr::inner_join(target_totals, by = "Disaggregated_Commodity_Code") %>%
+    dplyr::mutate(
+      abs_diff = abs(Sum_From_Table - N_Total),
+      rel_diff = ifelse(abs(N_Total) < tol, abs_diff, abs_diff / pmax(abs(N_Total), tol)),
+      pass = abs_diff <= tol | rel_diff <= tol
+    )
+  
+  scope2_pass <- all(scope2_totals$pass)
+  cat(" - Scope 2 sectors checked:", nrow(scope2_totals), "\n")
+  cat(" - PASS:", scope2_pass, "\n")
+  
+  if (!scope2_pass) {
+    cat("Scope 2 sector mismatches:\n")
+    print(scope2_totals %>% dplyr::filter(!pass))
+  }
+}
+
 cat("--- End verification ---\n\n")
 ```
 
@@ -646,9 +736,8 @@ if (!dir.exists(outputs_dir)) dir.create(outputs_dir, recursive = TRUE)
 # Create format subdirectories
 csv_dir <- file.path(outputs_dir, "csv")
 parquet_dir <- file.path(outputs_dir, "parquet")
-json_dir <- file.path(outputs_dir, "json")
 jsonld_dir <- file.path(outputs_dir, "jsonld")
-for (d in c(csv_dir, parquet_dir, json_dir, jsonld_dir)) {
+for (d in c(csv_dir, parquet_dir, jsonld_dir)) {
   if (!dir.exists(d)) dir.create(d, recursive = TRUE)
 }
 
@@ -668,10 +757,18 @@ excel_filename <- file.path(outputs_dir, paste0(file_basename, ".xlsx"))
 csv_filename   <- file.path(csv_dir, paste0(file_basename, ".csv"))
 csv_elec_filename <- file.path(csv_dir, paste0(file_basename, "_electricity_only.csv"))
 csv_sc_filename   <- file.path(csv_dir, "sector_classification.csv")
+csv_light_filename <- file.path(csv_dir, paste0(file_basename, "_light.csv"))
 
-wb <- createWorkbook()
+# Read export toggles from config (default all to TRUE if not specified)
+export_excel <- if(!is.null(config$export_options$excel)) config$export_options$excel else TRUE
+export_csv_contributions <- if(!is.null(config$export_options$csv_contributions)) config$export_options$csv_contributions else TRUE
+export_csv_lightweight <- if(!is.null(config$export_options$csv_lightweight)) config$export_options$csv_lightweight else TRUE
+export_csv_electricity <- if(!is.null(config$export_options$csv_electricity_only)) config$export_options$csv_electricity_only else TRUE
+export_csv_sector_class <- if(!is.null(config$export_options$csv_sector_classification)) config$export_options$csv_sector_classification else TRUE
 
-log_step("Creating Excel workbook and writing sheets...")
+if (export_excel) {
+  wb <- createWorkbook()
+  log_step("Creating Excel workbook and writing sheets...")
 
 # --- Create and Add Author Info Tab (as the first sheet) ---
 author_info <- data.frame(
@@ -745,13 +842,11 @@ addWorksheet(wb, "Leontief inverse (L)")
 writeData(wb, "Leontief inverse (L)", L_matrix, rowNames = TRUE)
 log_step("Wrote sheet: Leontief inverse (L)")
 
-saveWorkbook(wb, excel_filename, overwrite = TRUE)
-log_step(sprintf("Saved Excel: %s", excel_filename))
-
-# Use the cleaned table for the CSV export
-write.csv(final_table_by_code %>%
-  rename(!!abs_col_name := Absolute_Contribution_GHG), csv_filename, row.names = FALSE, na = "")
-log_step(sprintf("Wrote CSV: %s", csv_filename))
+  saveWorkbook(wb, excel_filename, overwrite = TRUE)
+  log_step(sprintf("Saved Excel: %s", excel_filename))
+} else {
+  log_step("Skipped Excel export (disabled in config.yml)")
+}
 
 # Write a short data license notice into outputs/
 data_license_text <- c(
@@ -764,181 +859,326 @@ data_license_text <- c(
 writeLines(data_license_text, file.path(outputs_dir, "DATA_LICENSE.txt"))
 log_step("Wrote file: outputs/DATA_LICENSE.txt")
 
+# Main contributions CSV export
+if (export_csv_contributions) {
+  write.csv(final_table_by_code %>%
+    rename(!!abs_col_name := Absolute_Contribution_GHG), csv_filename, row.names = FALSE, na = "")
+  log_step(sprintf("Wrote CSV: %s", csv_filename))
+} else {
+  log_step("Skipped main contributions CSV (disabled in config.yml)")
+}
+
 # Electricity-only CSV export
-write.csv(electric_only_by_code %>%
-  rename(!!abs_col_name := Absolute_Contribution_GHG), csv_elec_filename, row.names = FALSE, na = "")
-log_step(sprintf("Wrote CSV: %s", csv_elec_filename))
+if (export_csv_electricity) {
+  write.csv(electric_only_by_code %>%
+    rename(!!abs_col_name := Absolute_Contribution_GHG), csv_elec_filename, row.names = FALSE, na = "")
+  log_step(sprintf("Wrote CSV: %s", csv_elec_filename))
+} else {
+  log_step("Skipped electricity-only CSV (disabled in config.yml)")
+}
 
 # Export sector classification as CSV
-write.csv(
-  sector_classification,
-  csv_sc_filename,
-  row.names = FALSE,
-  na = ""
-)
-log_step(sprintf("Wrote CSV: %s", csv_sc_filename))
+if (export_csv_sector_class) {
+  write.csv(
+    sector_classification,
+    csv_sc_filename,
+    row.names = FALSE,
+    na = ""
+  )
+  log_step(sprintf("Wrote CSV: %s", csv_sc_filename))
+} else {
+  log_step("Skipped sector classification CSV (disabled in config.yml)")
+}
 
-cat("Saved Excel:", excel_filename, "\n")
-cat("Saved Contributions CSVs:  ", csv_filename, "\n")
-cat("Saved Electricity-only CSV: ", csv_elec_filename, "\n")
-cat("Saved Sector Classification CSV:  ", csv_sc_filename, "\n")
+# Lightweight CSV export: commodity > tier > ghg_source > relative_contribution (matches JSON-LD light)
+if (export_csv_lightweight) {
+  csv_light_data <- final_table_by_code %>%
+    group_by(
+      Disaggregated_Commodity_Code,
+      Economic_Tier,
+      Embedded_Sector_Code_for_GHG_sources
+    ) %>%
+    summarise(
+      Relative_Contribution = sum(Relative_Contribution),
+      .groups = "drop"
+    )
+  
+  write.csv(
+    csv_light_data,
+    csv_light_filename,
+    row.names = FALSE,
+    na = ""
+  )
+  log_step(sprintf("Wrote lightweight CSV: %s", csv_light_filename))
+} else {
+  log_step("Skipped lightweight CSV (disabled in config.yml)")
+}
+
+cat("\n--- Export Summary ---\n")
+if (export_excel) cat("Saved Excel:", excel_filename, "\n")
+if (export_csv_contributions) cat("Saved Contributions CSV:", csv_filename, "\n")
+if (export_csv_lightweight) cat("Saved Lightweight CSV:", csv_light_filename, "\n")
+if (export_csv_electricity) cat("Saved Electricity-only CSV:", csv_elec_filename, "\n")
+if (export_csv_sector_class) cat("Saved Sector Classification CSV:", csv_sc_filename, "\n")
 
 # --- 6. Structured outputs for data science and knowledge graphs ---
-log_step("Writing structured outputs (Parquet, JSON, JSON-LD)...")
+log_step("Writing structured outputs (Parquet, JSON-LD)...")
+
+# Read export toggles from config (default all to TRUE if not specified)
+export_parquet <- if(!is.null(config$export_options$parquet)) config$export_options$parquet else TRUE
+export_jsonld <- if(!is.null(config$export_options$jsonld)) config$export_options$jsonld else TRUE
 
 # 6.1 Parquet: optimized columnar format for data science
-parquet_start <- Sys.time()
-parquet_filename <- file.path(parquet_dir, paste0(file_basename, ".parquet"))
-parquet_sc_filename <- file.path(parquet_dir, "sector_classification.parquet")
-arrow::write_parquet(
-  final_table_by_code %>% rename(!!abs_col_name := Absolute_Contribution_GHG),
-  parquet_filename,
-  compression = "snappy"
-)
-arrow::write_parquet(sector_classification, parquet_sc_filename, compression = "snappy")
-parquet_elapsed <- round(as.numeric(difftime(Sys.time(), parquet_start, units = "secs")), 2)
-log_step(sprintf("Wrote Parquet (2 files) in %.2f seconds", parquet_elapsed))
+if (export_parquet) {
+  parquet_start <- Sys.time()
+  parquet_filename <- file.path(parquet_dir, paste0(file_basename, ".parquet"))
+  parquet_sc_filename <- file.path(parquet_dir, "sector_classification.parquet")
+  arrow::write_parquet(
+    final_table_by_code %>% rename(!!abs_col_name := Absolute_Contribution_GHG),
+    parquet_filename,
+    compression = "snappy"
+  )
+  arrow::write_parquet(sector_classification, parquet_sc_filename, compression = "snappy")
+  parquet_elapsed <- round(as.numeric(difftime(Sys.time(), parquet_start, units = "secs")), 2)
+  log_step(sprintf("Wrote Parquet (2 files) in %.2f seconds", parquet_elapsed))
+} else {
+  log_step("Skipped Parquet export (disabled in config.yml)")
+}
 
-# 6.2 Hierarchical JSON: nested structure preserving commodity > tier > sector > scope
-# Build nested hierarchy for cleaner structure
-json_start <- Sys.time()
-log_step("Building hierarchical JSON (nesting commodity > tier > sector > scope)...")
+# 6.2 JSON-LD: RDF-ready with @context for knowledge graph ingestion and D3.js visualization
+if (export_jsonld) {
+  jsonld_start <- Sys.time()
+  log_step("Building hierarchical JSON-LD structures (full + lightweight)...")
+  
+  # === FULL VERSION: All detail preserved ===
+  # Structure: commodity → tier → sector → scope (with ghg_source, scope type, contributions)
+  log_step("Building full JSON-LD (commodity > tier > sector > scope)...")
+  json_data_full <- final_table_by_code %>%
+    transmute(
+      commodity_code = Disaggregated_Commodity_Code,
+      tier = Economic_Tier,
+      sector_code = Embedded_Sector_Code,
+      scope = Scope,
+      ghg_source_code = Embedded_Sector_Code_for_GHG_sources,
+      absolute_contribution = Absolute_Contribution_GHG,
+      relative_contribution = Relative_Contribution
+    )
+  
+  # Build nested hierarchy: commodity -> tier -> sector -> scopes
+  nested_json_full <- json_data_full %>%
+    group_by(commodity_code, tier, sector_code) %>%
+    summarise(
+      scopes = list(tibble(
+        scope = scope,
+        ghg_source_code = ghg_source_code,
+        absolute_contribution = absolute_contribution,
+        relative_contribution = relative_contribution
+      )),
+      .groups = "drop"
+    ) %>%
+    group_by(commodity_code, tier) %>%
+    summarise(
+      sectors = list(tibble(
+        sector_code = sector_code,
+        scopes = scopes
+      )),
+      .groups = "drop"
+    ) %>%
+    group_by(commodity_code) %>%
+    summarise(
+      tiers = list(tibble(
+        tier = tier,
+        sectors = sectors
+      )),
+      .groups = "drop"
+    )
+  
+  # === LIGHTWEIGHT VERSION: Aggregated for simple viz ===
+  # Structure: commodity → tier → ghg_source (aggregated across sectors and scopes)
+  log_step("Building lightweight JSON-LD (commodity > tier > ghg_source)...")
+  json_data_light <- final_table_by_code %>%
+    group_by(
+      Disaggregated_Commodity_Code,
+      Economic_Tier,
+      Embedded_Sector_Code_for_GHG_sources
+    ) %>%
+    summarise(
+      relative_contribution = sum(Relative_Contribution),
+      .groups = "drop"
+    ) %>%
+    transmute(
+      commodity_code = Disaggregated_Commodity_Code,
+      tier = Economic_Tier,
+      ghg_source_code = Embedded_Sector_Code_for_GHG_sources,
+      relative_contribution = relative_contribution
+    )
+  
+  nested_json_light <- json_data_light %>%
+    group_by(commodity_code, tier) %>%
+    summarise(
+      ghg_sources = list(tibble(
+        ghg_source_code = ghg_source_code,
+        relative_contribution = relative_contribution
+      )),
+      .groups = "drop"
+    ) %>%
+    group_by(commodity_code) %>%
+    summarise(
+      tiers = list(tibble(
+        tier = tier,
+        ghg_sources = ghg_sources
+      )),
+      .groups = "drop"
+    )
+  
+  # Build nested sector classification: category -> subcategory -> sectors
+  sc_json_nested <- sector_classification %>%
+    group_by(`Category Code`, `Category Name`, `Subcategory Code`, `Subcategory Name`) %>%
+    summarise(
+      sectors = list(tibble(
+        sector_code = `Sector code`,
+        sector_name = `Sector name`,
+        commodity_name = `Commodity name`,
+        description = Description
+      )),
+      .groups = "drop"
+    ) %>%
+    group_by(`Category Code`, `Category Name`) %>%
+    summarise(
+      subcategories = list(tibble(
+        subcategory_code = `Subcategory Code`,
+        subcategory_name = `Subcategory Name`,
+        sectors = sectors
+      )),
+      .groups = "drop"
+    ) %>%
+    transmute(
+      category_code = `Category Code`,
+      category_name = `Category Name`,
+      subcategories = subcategories
+    )
+  
+  # Sector classification JSON-LD with hierarchical structure
+  sc_jsonld_context <- list(
+    "@vocab" = "https://decarbnexus.com/vocab/useeio-classification#",
+    "schema" = "http://schema.org/",
+    "category_code" = list("@id" = "categoryCode", "@type" = "schema:Text"),
+    "category_name" = list("@id" = "categoryName", "@type" = "schema:Text"),
+    "subcategory_code" = list("@id" = "subcategoryCode", "@type" = "schema:Text"),
+    "subcategory_name" = list("@id" = "subcategoryName", "@type" = "schema:Text"),
+    "sector_code" = list("@id" = "sectorCode", "@type" = "@id"),
+    "sector_name" = list("@id" = "sectorName", "@type" = "schema:Text"),
+    "commodity_name" = list("@id" = "commodityName", "@type" = "schema:Text"),
+    "description" = list("@id" = "schema:description", "@type" = "schema:Text"),
+    "subcategories" = "hasSubcategory",
+    "sectors" = "hasSector"
+  )
+  
+  # Define vocabularies for both full and lightweight JSON-LD
+  
+  # Full version vocabulary (includes sector and scope)
+  jsonld_context_full <- list(
+    "@vocab" = "https://decarbnexus.com/vocab/useeio-disaggregation#",
+    "schema" = "http://schema.org/",
+    "useeio" = "https://www.epa.gov/land-research/us-environmentally-extended-input-output-useeio-technical-content#",
+    "commodity_code" = list("@id" = "useeio:commodity", "@type" = "@id"),
+    "sector_code" = list("@id" = "useeio:sector", "@type" = "@id"),
+    "ghg_source_code" = list("@id" = "ghgSource", "@type" = "@id"),
+    "tier" = "economicTier",
+    "scope" = "ghgScope",
+    "absolute_contribution" = list("@id" = "absoluteContribution", "@type" = "schema:Float"),
+    "relative_contribution" = list("@id" = "relativeContribution", "@type" = "schema:Float"),
+    "tiers" = "hasTier",
+    "sectors" = "hasSector",
+    "scopes" = "hasScope"
+  )
+  
+  # Lightweight version vocabulary (aggregated, no sector/scope split)
+  jsonld_context_light <- list(
+    "@vocab" = "https://decarbnexus.com/vocab/useeio-disaggregation#",
+    "schema" = "http://schema.org/",
+    "useeio" = "https://www.epa.gov/land-research/us-environmentally-extended-input-output-useeio-technical-content#",
+    "commodity_code" = list("@id" = "useeio:commodity", "@type" = "@id"),
+    "ghg_source_code" = list("@id" = "ghgSource", "@type" = "@id"),
+    "tier" = "economicTier",
+    "relative_contribution" = list("@id" = "relativeContribution", "@type" = "schema:Float"),
+    "tiers" = "hasTier",
+    "ghg_sources" = "hasGHGSource"
+  )
+  
+  jsonld_output_full <- list(
+    "@context" = jsonld_context_full,
+    "@graph" = nested_json_full
+  )
+  
+  jsonld_output_light <- list(
+    "@context" = jsonld_context_light,
+    "@graph" = nested_json_light
+  )
+  
+  sc_jsonld_output <- list(
+    "@context" = sc_jsonld_context,
+    "@graph" = sc_json_nested
+  )
+  
+  log_step("Writing JSON-LD files...")
+  
+  jsonld_filename <- file.path(jsonld_dir, paste0(file_basename, ".jsonld"))
+  jsonld_light_filename <- file.path(jsonld_dir, paste0(file_basename, "_light.jsonld"))
+  jsonld_sc_filename <- file.path(jsonld_dir, "sector_classification.jsonld")
+  
+  # Write full JSON-LD
+  jsonlite::write_json(
+    jsonld_output_full,
+    jsonld_filename,
+    pretty = TRUE,
+    auto_unbox = TRUE,
+    digits = 6
+  )
+  
+  # Write lightweight JSON-LD
+  jsonlite::write_json(
+    jsonld_output_light,
+    jsonld_light_filename,
+    pretty = TRUE,
+    auto_unbox = TRUE,
+    digits = 6
+  )
+  
+  # Write sector classification
+  jsonlite::write_json(
+    sc_jsonld_output,
+    jsonld_sc_filename,
+    pretty = TRUE,
+    auto_unbox = TRUE
+  )
+  
+  jsonld_elapsed <- round(as.numeric(difftime(Sys.time(), jsonld_start, units = "secs")), 2)
+  log_step(sprintf("Wrote JSON-LD (3 files: full, lightweight, classification) in %.2f seconds", jsonld_elapsed))
+} else {
+  log_step("Skipped JSON-LD export (disabled in config.yml)")
+}
 
-nested_json <- final_table_by_code %>%
-  rename(absolute_contribution = Absolute_Contribution_GHG) %>%
-  group_by(Disaggregated_Commodity_Code) %>%
-  summarise(
-    tiers = list(
-      cur_data() %>%
-        group_by(Economic_Tier) %>%
-        summarise(
-          sectors = list(
-            cur_data() %>%
-              group_by(Embedded_Sector_Code, Embedded_Sector_Code_for_GHG_sources) %>%
-              summarise(
-                scopes = list(
-                  cur_data() %>%
-                    transmute(
-                      scope = Scope,
-                      absolute_contribution,
-                      relative_contribution = Relative_Contribution
-                    )
-                ),
-                .groups = "drop"
-              ) %>%
-              rename(
-                sector_code = Embedded_Sector_Code,
-                ghg_source_code = Embedded_Sector_Code_for_GHG_sources
-              )
-          ),
-          .groups = "drop"
-        ) %>%
-        rename(tier = Economic_Tier)
-    ),
-    .groups = "drop"
-  ) %>%
-  rename(commodity_code = Disaggregated_Commodity_Code)
+# Summary of structured outputs timing
+if (export_parquet || export_jsonld) {
+  total_structured_elapsed <- 
+    (if(export_parquet) parquet_elapsed else 0) +
+    (if(export_jsonld) jsonld_elapsed else 0)
+  log_step(sprintf("All structured outputs complete in %.2f seconds total", total_structured_elapsed))
+}
 
-# Sector classification as flat JSON (no further nesting needed)
-sc_json <- sector_classification %>%
-  rename_with(~gsub(" ", "_", tolower(.)), everything())
-
-log_step(sprintf("Hierarchy built (%s commodities); writing JSON files...", nrow(nested_json)))
-
-json_filename <- file.path(json_dir, paste0(file_basename, ".json"))
-json_sc_filename <- file.path(json_dir, "sector_classification.json")
-jsonlite::write_json(
-  nested_json,
-  json_filename,
-  pretty = TRUE,
-  auto_unbox = TRUE,
-  digits = 6
-)
-jsonlite::write_json(
-  sc_json,
-  json_sc_filename,
-  pretty = TRUE,
-  auto_unbox = TRUE
-)
-json_elapsed <- round(as.numeric(difftime(Sys.time(), json_start, units = "secs")), 2)
-log_step(sprintf("Wrote JSON (2 files) in %.2f seconds", json_elapsed))
-
-# 6.3 JSON-LD: RDF-ready with @context for knowledge graph ingestion
-jsonld_start <- Sys.time()
-log_step("Building JSON-LD with @context vocabularies...")
-
-# Define vocabulary for USEEIO disaggregation factors
-jsonld_context <- list(
-  "@vocab" = "https://decarbnexus.com/vocab/useeio-disaggregation#",
-  "schema" = "http://schema.org/",
-  "useeio" = "https://www.epa.gov/land-research/us-environmentally-extended-input-output-useeio-technical-content#",
-  "ghg" = "http://www.wikidata.org/entity/",
-  "commodity_code" = list("@id" = "useeio:commodity", "@type" = "@id"),
-  "sector_code" = list("@id" = "useeio:sector", "@type" = "@id"),
-  "ghg_source_code" = list("@id" = "ghgSource", "@type" = "@id"),
-  "tier" = "economicTier",
-  "scope" = "ghgScope",
-  "absolute_contribution" = list("@id" = "absoluteContribution", "@type" = "schema:Float"),
-  "relative_contribution" = list("@id" = "relativeContribution", "@type" = "schema:Float"),
-  "tiers" = "hasTier",
-  "sectors" = "hasSector",
-  "scopes" = "hasScope"
-)
-
-jsonld_output <- list(
-  "@context" = jsonld_context,
-  "@graph" = nested_json
-)
-
-# Sector classification JSON-LD with simple schema.org vocabulary
-sc_jsonld_context <- list(
-  "@vocab" = "https://decarbnexus.com/vocab/useeio-classification#",
-  "schema" = "http://schema.org/",
-  "category_code" = list("@id" = "categoryCode", "@type" = "schema:Text"),
-  "category_name" = list("@id" = "categoryName", "@type" = "schema:Text"),
-  "subcategory_code" = list("@id" = "subcategoryCode", "@type" = "schema:Text"),
-  "subcategory_name" = list("@id" = "subcategoryName", "@type" = "schema:Text"),
-  "sector_code" = list("@id" = "sectorCode", "@type" = "@id"),
-  "sector_name" = list("@id" = "sectorName", "@type" = "schema:Text"),
-  "commodity_name" = list("@id" = "commodityName", "@type" = "schema:Text"),
-  "description" = list("@id" = "schema:description", "@type" = "schema:Text")
-)
-
-sc_jsonld_output <- list(
-  "@context" = sc_jsonld_context,
-  "@graph" = sc_json
-)
-
-log_step("Writing JSON-LD files...")
-
-jsonld_filename <- file.path(jsonld_dir, paste0(file_basename, ".jsonld"))
-jsonld_sc_filename <- file.path(jsonld_dir, "sector_classification.jsonld")
-jsonlite::write_json(
-  jsonld_output,
-  jsonld_filename,
-  pretty = TRUE,
-  auto_unbox = TRUE,
-  digits = 6
-)
-jsonlite::write_json(
-  sc_jsonld_output,
-  jsonld_sc_filename,
-  pretty = TRUE,
-  auto_unbox = TRUE
-)
-jsonld_elapsed <- round(as.numeric(difftime(Sys.time(), jsonld_start, units = "secs")), 2)
-log_step(sprintf("Wrote JSON-LD (2 files) in %.2f seconds", jsonld_elapsed))
-
-total_structured_elapsed <- parquet_elapsed + json_elapsed + jsonld_elapsed
-log_step(sprintf("All structured outputs complete in %.2f seconds total", total_structured_elapsed))
-
-cat("Saved structured outputs:\n")
-cat(" - Parquet (data):  ", parquet_filename, "\n")
-cat(" - Parquet (class): ", parquet_sc_filename, "\n")
-cat(" - JSON (data):     ", json_filename, "\n")
-cat(" - JSON (class):    ", json_sc_filename, "\n")
-cat(" - JSON-LD (data):  ", jsonld_filename, "\n")
-cat(" - JSON-LD (class): ", jsonld_sc_filename, "\n")
+if (export_parquet || export_jsonld) {
+  cat("\n--- Structured Outputs ---\n")
+  if (export_parquet) {
+    cat("Saved Parquet (data):", parquet_filename, "\n")
+    cat("Saved Parquet (class):", parquet_sc_filename, "\n")
+  }
+  if (export_jsonld) {
+    cat("Saved JSON-LD (full):", jsonld_filename, "\n")
+    cat("Saved JSON-LD (light):", jsonld_light_filename, "\n")
+    cat("Saved JSON-LD (class):", jsonld_sc_filename, "\n")
+  }
+}
 ```
 
 ## 6. Preview of Final Results

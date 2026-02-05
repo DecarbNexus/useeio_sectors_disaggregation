@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>USEEIO Sector Disaggregation – Sunburst</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20251028-1" />
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  </head>
+  <body>
+    <header>
+      <h1>USEEIO Sector Disaggregation – Interactive Sunburst</h1>
+      <p>
+  Explore Scope 3 contributions by sector, economic tier, and scope. Data sourced from the
+  <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/releases/tag/v1.0" target="_blank" rel="noopener">v1.0 Release assets</a>.
+      </p>
+      <p class="note">
+        Tip: This loads a CSV (~45MB) directly from GitHub. First load can take a few seconds.
+      </p>
+    </header>
+
+    <section class="controls">
+      <div class="control-row">
+        <label for="commoditySelect">Commodity to disaggregate:</label>
+        <input id="commoditySearch" type="search" placeholder="Type to filter commodities…" aria-label="Search commodities" />
+        <select id="commoditySelect"></select>
+      </div>
+
+      <div class="control-row">
+        <label for="secondRingField">Disaggregate by:</label>
+        <select id="secondRingField">
+          <option value="sector_name" selected>Sector name</option>
+          <option value="category_name">Category Name</option>
+          <option value="category_code">Category Code</option>
+          <option value="subcategory_name">Subcategory Name</option>
+          <option value="subcategory_code">Subcategory Code</option>
+          <option value="code">Sector code</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <label for="minPct">Minimum contribution to display (%)</label>
+        <input id="minPct" type="number" min="0" max="5" step="0.01" value="0.25" />
+        <button id="redrawBtn">Redraw</button>
+      </div>
+    </section>
+
+    <section class="figure-meta">
+      <h2 id="figureTitle" class="figure-title"></h2>
+      <div id="legend" class="legend"></div>
+    </section>
+
+    <main>
+      <div id="chart"></div>
+      <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+    </main>
+
+    <footer>
+      <p>
+  Source code: <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation">README</a> · Data: <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/releases/tag/v1.0" target="_blank" rel="noopener">Release v1.0</a> · Credits: 
+        <a href="https://github.com/USEPA/useeior/" target="_blank" rel="noopener">USEEIO</a> & 
+        <a href="https://github.com/USEPA/flowsa" target="_blank" rel="noopener">FLOWSA</a>
+      </p>
+    </footer>
+
+  <script src="sunburst.js?v=20251028-1"></script>
+  </body>
+  </html>
