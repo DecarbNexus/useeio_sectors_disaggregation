@@ -670,6 +670,13 @@ commodity_mapping <- model$Commodities %>% select(Code, Name)
 final_table_by_name <- final_table_by_code %>%
   left_join(commodity_mapping, by = c("Disaggregated_Commodity_Code" = "Code")) %>%
   rename(Disaggregated_Commodity_Name = Name) %>%
+  mutate(
+    Disaggregated_Commodity_Name = dplyr::case_when(
+      Disaggregated_Commodity_Code == "221100-upstream_with_losses" ~ "Electricity (upstream with losses)",
+      Disaggregated_Commodity_Code == "221100-upstream_without_losses" ~ "Electricity (upstream without losses)",
+      TRUE ~ Disaggregated_Commodity_Name
+    )
+  ) %>%
   left_join(industry_mapping, by = c("Embedded_Sector_Code" = "Code")) %>%
   rename(Embedded_Sector_Name = Name) %>%
   left_join(industry_mapping, by = c("Embedded_Sector_Code_for_GHG_sources" = "Code")) %>%
@@ -911,13 +918,14 @@ if (export_csv_sector_class) {
   log_step("Skipped sector classification CSV (disabled in config.yml)")
 }
 
-# Lightweight CSV export: commodity > tier > ghg_source > relative_contribution (matches JSON-LD light)
+# Lightweight CSV export: commodity > embedded sector > tier > scope > relative_contribution
 if (export_csv_lightweight) {
   csv_light_data <- final_table_by_code %>%
     group_by(
       Disaggregated_Commodity_Code,
+      Embedded_Sector_Code,
       Economic_Tier,
-      Embedded_Sector_Code_for_GHG_sources
+      Scope
     ) %>%
     summarise(
       Relative_Contribution = sum(Relative_Contribution),
