@@ -43,7 +43,7 @@ The final outputs are an Excel workbook and a CSV, saved in the `outputs/` folde
 
 ## 2. Setup & Configuration
 
-This block handles all setup, including package installation and dynamically fetching model specifications from the official USEPA repository based on the user's selected `sef_version`.
+This block handles all setup, including package installation and dynamically fetching model specifications from GitHub based on the user's selected `sef_version`. For v1.3.0 and older the specs come from `USEPA/supply-chain-factors`; for v1.4.0 and newer from `cornerstone-data/supply-chain-factors`.
 
 ```{r 01-setup-and-load-packages, echo=FALSE, message=FALSE, warning=FALSE}
 # --- 1. Package Management ---
@@ -66,17 +66,26 @@ pacman::p_load(
 config <- read_yaml("config.yml")
 cat("User requested Supply Chain Factors (SEF) version:", config$sef_version, "\n")
 
-# --- 3. Fetch Model Specifications from USEPA GitHub Repository ---
-versioning_url <- "https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/Versioning.yml"
-
-# Check if the URL is accessible
-response <- GET(versioning_url)
-if (http_error(response)) {
-  stop("Could not access the Versioning.yml file on GitHub. Please check your internet connection.")
+# --- 3. Fetch Versioning.yml (Cornerstone first, USEPA as fallback) ---
+# Cornerstone is the primary home of SEF v1.4.0+. Their Versioning.yml also
+# contains all older versions (v1.1.1–v1.3.0), so it serves as a single source
+# of truth. USEPA's copy is kept as a fallback for older versions.
+versioning_urls <- c(
+  "https://raw.githubusercontent.com/cornerstone-data/supply-chain-factors/main/Versioning.yml",
+  "https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/Versioning.yml"
+)
+versioning_data <- NULL
+for (versioning_url in versioning_urls) {
+  response <- tryCatch(GET(versioning_url), error = function(e) NULL)
+  if (!is.null(response) && !http_error(response)) {
+    versioning_data <- read_yaml(text = content(response, "text", encoding = "UTF-8"))
+    cli::cli_alert_info("Loaded Versioning.yml from: {versioning_url}")
+    break
+  }
 }
-
-# Read the versioning file directly from the URL's content
-versioning_data <- read_yaml(text = content(response, "text", encoding = "UTF-8"))
+if (is.null(versioning_data)) {
+  stop("Could not access Versioning.yml from any known URL. Please check your internet connection.")
+}
 
 # Look up the details for the user-specified SEF version
 version_details <- versioning_data[[config$sef_version]]
@@ -90,23 +99,47 @@ if (is.null(version_details)) {
   )
 }
 
-# --- 4. Install and Load correct `useeior` version ---
+# --- 4. Resolve GitHub org and install correct `useeior` version ---
+# useeior_org defaults to "cornerstone-data" (the permanent home from v1.4.0 onward).
+# For older SEF versions hosted by USEPA, set useeior_org: "USEPA" in model_spec_mapping.yml.
+model_map_early <- tryCatch(read_yaml("model_spec_mapping.yml"), error = function(e) NULL)
+ver_config  <- if (!is.null(model_map_early)) model_map_early$sef_version_config[[config$sef_version]] else NULL
+useeior_org <- if (!is.null(ver_config) && !is.null(ver_config$useeior_org)) ver_config$useeior_org else "cornerstone-data"
+
 useeior_tag <- versioning_data[[config$sef_version]][["useeior_tag"]]
 useeior_ver <- versioning_data[[config$sef_version]][["useeior_ver"]]
-installed_pkg <- installed.packages()
-if (!"devtools"%in%installed_pkg[, "Package"]) {
+install_target <- paste0(useeior_org, "/useeior@", useeior_tag)
+
+if (!"devtools" %in% installed.packages()[, "Package"]) {
   suppressMessages(install.packages("devtools"))
 }
-if (!"useeior"%in%installed_pkg[, "Package"]) {
-  cli::cli_alert_info("Installing useeior v{useeior_ver} (tag @{useeior_tag}) from GitHub...")
-  suppressMessages(devtools::install_github(paste0("USEPA/useeior@", useeior_tag), quiet = TRUE))
+
+# Compare by RemoteRef + RemoteUsername (stored in DESCRIPTION by devtools::install_github).
+# This works correctly for both semver tags ("v1.5.3") and named tags ("SEFv1.4"), and
+# also catches org switches (USEPA → cornerstone-data), avoiding unnecessary reinstalls.
+needs_install <- TRUE
+if ("useeior" %in% installed.packages()[, "Package"]) {
+  desc_path <- system.file("DESCRIPTION", package = "useeior")
+  if (nzchar(desc_path)) {
+    desc_fields <- read.dcf(desc_path, fields = c("RemoteRef", "RemoteUsername", "Version"))
+    installed_ref <- as.character(desc_fields[, "RemoteRef"])
+    installed_org <- as.character(desc_fields[, "RemoteUsername"])
+    if (!is.na(installed_ref) && identical(installed_ref, useeior_tag) &&
+        !is.na(installed_org) && identical(installed_org, useeior_org)) {
+      needs_install <- FALSE
+      cli::cli_alert_success(
+        "useeior {useeior_ver} (tag @{useeior_tag}, org {useeior_org}) is already installed."
+      )
+    } else {
+      cli::cli_alert_warning(
+        "Installed useeior is from {installed_org}@{installed_ref}; need {useeior_org}@{useeior_tag}. Reinstalling..."
+      )
+    }
+  }
 }
-installed_useeior_ver <- installed_pkg[installed_pkg[, "Package"]=="useeior", "Version"]
-if ("useeior"%in%installed_pkg[, "Package"] && useeior_ver!=installed_useeior_ver) {
-  cli::cli_alert_warning(c("A new version of useeior (v{useeior_ver}) will be installed for generating SEF {SEF_version}. ",
-                           "The useeior v{installed_useeior_ver} you have installed will be overwritten."))
-  cli::cli_alert_info("Installing useeior v{useeior_ver} (tag @{useeior_tag}) from GitHub...")
-  suppressMessages(devtools::install_github(paste0("USEPA/useeior@", useeior_tag), quiet = TRUE))
+if (needs_install) {
+  cli::cli_alert_info("Installing useeior {useeior_ver} (tag @{useeior_tag}) from {useeior_org}...")
+  suppressMessages(devtools::install_github(install_target, quiet = TRUE))
 }
 
 library(useeior)
@@ -136,11 +169,11 @@ if (!is.null(model_map) && !is.null(model_map$model_name_by_sef_version[[config$
     "No model mapping found for sef_version '", config$sef_version, "'.\n",
     "Please add an entry in 'model_spec_mapping.yml' under 'model_name_by_sef_version'.\n",
     "For example:\n",
-    "  \"", config$sef_version, "\": \"USEEIOvX.Y.Z-GHG\"\n\n",
+    "  \"", config$sef_version, "\": \"USEEIOvX.Y.Z-name\"\n\n",
     "How to find the correct USEEIO model name: \n",
-    " - Check the SEF release notes and/or Versioning.yml in USEPA/supply-chain-factors.\n",
-    " - URL: https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/Versioning.yml\n",
-    " - Identify the model spec name used for that SEF release (e.g., USEEIOv2.2.22-GHG).\n"
+    " - Check the SEF release notes and/or Versioning.yml in cornerstone-data/supply-chain-factors.\n",
+    " - URL: https://raw.githubusercontent.com/cornerstone-data/supply-chain-factors/main/Versioning.yml\n",
+    " - Identify the model spec name used for that SEF release (e.g., USEEIOv2.2.22-GHG or USEEIOv2.6.0-phoebe-23).\n"
   )
   stop(msg)
 }
@@ -149,10 +182,12 @@ local_spec_file <- file.path(spec_dir, paste0(model_name, ".yml"))
 # --- 2. Download the spec file if it doesn't exist locally ---
 if (!file.exists(local_spec_file)) {
 
+  # Route to the correct org's supply-chain-factors repo (set in chunk 01)
+  sef_repo_org <- if (exists("useeior_org")) useeior_org else "cornerstone-data"
   model_spec_url <- paste0(
-    "https://raw.githubusercontent.com/USEPA/supply-chain-factors/main/model-specs/",
-    model_name,
-    ".yml"
+    "https://raw.githubusercontent.com/", sef_repo_org,
+    "/supply-chain-factors/main/model-specs/",
+    model_name, ".yml"
   )
 
   cli::cli_alert_info("Downloading model specification file from: {model_spec_url}")
@@ -171,10 +206,16 @@ if (!file.exists(local_spec_file)) {
 }
 
 # --- 3. Build the model ---
-# We now use the LOCAL file path for the configpaths argument.
-# The `cache=TRUE` option will save time on subsequent runs.
+# configpaths must include both the local model spec AND the package's disaggspecs
+# directory, which is needed by newer models (e.g. USEEIOv2.6.0-phoebe-23) that
+# reference bundled disaggregation specs like WasteDisaggregationDetail2017.yml.
+disagg_spec_dir <- system.file("extdata/disaggspecs", package = "useeior")
+config_paths <- c(local_spec_file)
+if (nzchar(disagg_spec_dir) && dir.exists(disagg_spec_dir)) {
+  config_paths <- c(config_paths, disagg_spec_dir)
+}
 cli::cli_alert_info("Building USEEIO model: {model_name} (this can take a minute)...")
-model <- buildModel(model_name, configpaths = local_spec_file)
+model <- buildModel(model_name, configpaths = config_paths)
 cli::cli_alert_success("Model built.")
 ```
 
@@ -799,6 +840,16 @@ if (export_excel) {
   log_step("Creating Excel workbook and writing sheets...")
 
 # --- Create and Add Author Info Tab (as the first sheet) ---
+if (useeior_org == "USEPA") {
+  ack_note        <- "This project builds on open-source work by the U.S. EPA (see below)"
+  ack_useeior_url <- "https://github.com/USEPA/useeior (MIT License, Copyright U.S. EPA)"
+  ack_sef_url     <- "https://github.com/USEPA/supply-chain-factors (MIT License, Copyright U.S. EPA)"
+} else {
+  ack_note        <- "This project builds on open-source work by the U.S. EPA (USEEIO framework) and Cornerstone (SEF v1.4.0+, see below)"
+  ack_useeior_url <- "https://github.com/cornerstone-data/useeior (MIT License, Cornerstone; original: USEPA/useeior)"
+  ack_sef_url     <- "https://github.com/cornerstone-data/supply-chain-factors (MIT License, Cornerstone; original: USEPA/supply-chain-factors)"
+}
+
 author_info <- data.frame(
   Field = c(
     "Author",
@@ -825,9 +876,9 @@ author_info <- data.frame(
     "CC BY 4.0 (see LICENSE-DATA.md)",
     "https://creativecommons.org/licenses/by/4.0/",
     "",
-    "This project builds on open-source work by the U.S. EPA (see below)",
-    "https://github.com/USEPA/useeior (MIT License, Copyright U.S. EPA)",
-    "https://github.com/USEPA/supply-chain-factors (MIT License, Copyright U.S. EPA)",
+    ack_note,
+    ack_useeior_url,
+    ack_sef_url,
     "Both upstream projects are released under the MIT License. See their repositories for full license text."
   ),
   stringsAsFactors = FALSE

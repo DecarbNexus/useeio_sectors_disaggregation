@@ -237,13 +237,20 @@ We aim to have this workflow and its outputs peer-reviewed over the next few mon
 
 ## Credits and acknowledgment
 
-This project builds on open-source work by the U.S. EPA. Huge thanks to the USEPA and Cornerstone teams and contributors:
+This project builds on open-source work by the U.S. EPA and Cornerstone. Huge thanks to the USEPA and Cornerstone teams and contributors.
 
+**SEF v1.1.1–v1.3.0 — created by the U.S. EPA:**
 - **USEEIO model & useeior package**: https://github.com/USEPA/useeior/ — MIT License, Copyright U.S. EPA
 - **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors — MIT License, Copyright U.S. EPA
+
+**SEF v1.4.0+ — maintained by Cornerstone (fork of USEPA originals):**
+- **USEEIO model & useeior package**: https://github.com/cornerstone-data/useeior — MIT License
+- **Supply Chain Emission Factors**: https://github.com/cornerstone-data/supply-chain-factors — MIT License
+
+**Data foundation (all versions):**
 - **FLOWSA**: https://github.com/USEPA/flowsa
 
-Both useeior and supply-chain-factors are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
+All upstream projects are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
 
 Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
 
