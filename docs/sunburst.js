@@ -1,24 +1,17 @@
 // USEEIO Sector Disaggregation – Interactive Sunburst
-// - Loads CSV from GitHub Release assets (preferred) with fallbacks
+// - Loads slim light CSV from GitHub Release assets (fallback to same-origin bundle)
 // - Lets user select a Disaggregated_Commodity
 // - Builds hierarchy: Tier -> SectorGroup (selectable) -> Scope with value = sum of Relative_Contribution
 
 // Repo / Release configuration
 const OWNER = "DecarbNexus";
 const REPO = "useeio_sectors_disaggregation";
-const TAG = "v1.0";
-const DATA_FILENAME = "SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv";
+const TAG = "v1.1";
+const LIGHT_FILENAME = "SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv";
 const CLASS_FILENAME = "sector_classification.csv";
 
-// Preferred: Release assets
-const RELEASE_CSV_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${DATA_FILENAME}`;
+const RELEASE_LIGHT_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${LIGHT_FILENAME}`;
 const RELEASE_CLASS_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${CLASS_FILENAME}`;
-
-// Raw file at the tagged version (preferred over main)
-const RAW_CSV_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${TAG}/outputs/${DATA_FILENAME}`;
-
-// Optional: sector classification CSV exported from the Excel tab. If missing, second ring defaults to Sector code.
-const CLASS_CSV_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${TAG}/outputs/${CLASS_FILENAME}`;
 
 // dynamic sizing computed at render time
 let WIDTH = 700;
@@ -35,11 +28,9 @@ const CHART_SCALE = 0.75; // 75% of previous size
 async function loadCSV() {
   const candidates = [
     // Prefer same-origin bundle (downloaded into docs/data by GitHub Actions)
-    "data/" + DATA_FILENAME,
-    // Then Release asset, raw main, and local outputs
-    RELEASE_CSV_URL,
-    RAW_CSV_URL,
-    "../outputs/" + DATA_FILENAME,
+    "data/" + LIGHT_FILENAME,
+    // Then Release asset
+    RELEASE_LIGHT_URL,
   ];
   let lastErr;
   for (const url of candidates) {
@@ -55,20 +46,13 @@ async function loadCSV() {
       continue;
     }
   }
-  throw new Error("Failed to load CSV from any candidate URL: " + lastErr);
+  throw new Error("Failed to load light CSV: " + lastErr);
 }
 
-// Per-commodity JSONs and slim CSV removed; we load the full CSV once and filter client-side.
-
 async function tryLoadClassification() {
-  // Attempt Release first, then raw main, then repo-relative path
   const candidates = [
-    // Prefer same-origin bundle
     "data/" + CLASS_FILENAME,
-    // Then Release asset, raw main, then repo-relative fallback
     RELEASE_CLASS_URL,
-    CLASS_CSV_URL,
-    "../outputs/" + CLASS_FILENAME,
   ];
   let lastErr;
   for (const url of candidates) {
