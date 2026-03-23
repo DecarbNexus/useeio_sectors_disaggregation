@@ -4,7 +4,7 @@
 # Instructions:
 # 1. Edit the 'sef_version' to the desired Supply Chain Emission Factors
 #    (SEF) table version from the USEPA repository.
-# 2. Save this file and then run the 'structured_path_analysis.Rmd' script.
+# 2. Save this file and then run the 'generate_scope3_disaggregation_table_tier1_2_3+.Rmd' script.
 # --------------------------------------------------------------------------
 
 # Set the desired version of the Supply Chain Emission Factors (SEF) table.
@@ -13,10 +13,21 @@
 # Example: "v1.1.1"
 sef_version: "v1.3.0"
 
-
 # Define the list of sectors whose direct emissions should be categorized as Scope 2.
 # These are typically utilities like electricity, steam, and heat.
 # Use the 6-digit NAICS code with the '/US' suffix.
 # Add or remove sectors from the list as needed.
 scope_2_sectors:
   - "221100/US"  # Electrical Power Generation, Transmission and Distribution
+
+  
+# Export options for outputs
+# Set to false to skip exports and reduce processing time
+export_options:
+  excel: true                      # Excel workbook with all sheets
+  csv_contributions: true          # Main contributions CSV
+  csv_lightweight: true            # Lightweight CSV (aggregated by commodity > tier > ghg_source)
+  csv_electricity_only: true       # Electricity-only filtered CSV
+  csv_sector_classification: true  # Sector classification CSV
+  parquet: true                   # Fast: ~1-2 seconds (columnar format for data science)
+  jsonld: true                    # Moderate: ~5-10 minutes (hierarchical RDF-ready format for D3.js and knowledge graphs)

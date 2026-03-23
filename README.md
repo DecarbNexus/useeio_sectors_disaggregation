@@ -11,18 +11,69 @@ The main output is an Excel workbook and a CSV with absolute and relative contri
 
 ### Interactive visual
 
-- Try the [interactive sunburst](https://decarbnexus.github.io/useeio_sectors_disaggregation/) built from the CSV in this repo.
+- Try the interactive sunburst built from the CSV in this repo: https://open.decarbnexus.com/
 - It lets you pick a commodity and explores Economic tiers (1/2/3+) → Scopes (1/2) → Sectors as a sunburst using Relative_Contribution values.
 
 ### Data tables
 
-Download the latest files from the v1.0 release:
+Download the latest files from the `outputs/` folder:
 
-- **Excel** (all-in-one workbook): `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
-- **CSV** (flat tables): `csv/`
-  - Main contributions: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv`
-  - Electricity-only: `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv`
-  - Sector classification: `sector_classification.csv`
+- **Excel** (all-in-one workbook): `outputs/SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.xlsx`
+  - Best for: Spreadsheet users, quick exploration, pivot tables
+  - Contains: All data tables, sector classification, and underlying EEIO matrices
+  
+- **CSV** (flat tables): `outputs/csv/`
+  - Best for: Excel users, simple data imports, basic analysis
+  - Files:
+    - `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>.csv` - Main contributions table
+    - `SEF_<version>_disaggregation_factors_GHG<year>_IO<year>_electricity_only.csv` - Electricity sector only
+    - `sector_classification.csv` - Sector metadata (categories, descriptions)
+  
+- **Parquet** (columnar format): `outputs/parquet/`
+  - Best for: Python/R data scientists, large dataset analysis, fast queries
+  - Why use it: ~10× faster to load than CSV, smaller file size, preserves data types
+  - How to use:
+    - **Python**: `import pandas as pd; df = pd.read_parquet('file.parquet')`
+    - **R**: `library(arrow); df <- read_parquet('file.parquet')`
+    - **DuckDB**: `SELECT * FROM read_parquet('file.parquet')`
+  - Files: Main contributions + sector classification
+  
+- **JSON-LD** (hierarchical, RDF-ready): `outputs/jsonld/`
+  - Best for: Web developers (D3.js visualizations), knowledge graphs, semantic web
+  - Structure: Nested hierarchy with full detail preserved
+    - **Main data** (`SEF_*.jsonld`): `commodity → tier → sector → scope` (4 levels)
+      - Each scope contains: `scope` type, `ghg_source_code`, `absolute_contribution`, `relative_contribution`
+      - Example: "For commodity 111200, tier 1, sector 111200, Scope 2 emissions come from GHG source 221100 with 0.012 relative contribution"
+    - **Sector classification** (`sector_classification.jsonld`): `category → subcategory → sector` (3 levels)
+      - Organized by NAICS-style categories for easy browsing
+  - Why use it:
+    - **D3.js/web viz**: Load directly without reshaping; perfect for hierarchical charts (sunburst, treemap, icicle)
+    - **Chained disaggregation**: GHG source codes can be matched to another disaggregation dataset (e.g., sector → GHG gas contributions) for combined visualization
+    - **Knowledge graphs**: Import into triple stores (Apache Jena, RDF4J) or convert to Turtle/N-Triples
+    - **APIs**: Serve directly from web servers without processing
+  - How to use:
+    - **JavaScript/D3**: `d3.json('file.jsonld').then(data => { const graph = data['@graph']; ... })`
+    - **Python**: `import json; data = json.load(open('file.jsonld'))['@graph']`
+    - **RDF tools**: Use `@context` to understand semantic relationships
+  - Files: Main contributions + sector classification with vocabulary mappings
+  
+- **Lightweight CSV** (`outputs/csv/*_light.csv`):
+  - Best for: Quick commodity-to-GHG-source lookups, simple spreadsheet analysis
+  - Structure: Flat table with just 3 columns: `Disaggregated_Commodity_Code`, `Embedded_Sector_Code_for_GHG_sources`, `Relative_Contribution`
+  - Aggregated: Sums contributions across tiers, sectors, and scopes
+  - Use case: "What GHG sources contribute to commodity X and by how much?"
+
+**Quick format comparison:**
+
+| Format | Load Speed | File Size | Best For | Learning Curve |
+|--------|-----------|-----------|----------|----------------|
+| Excel/CSV | Baseline | Largest | Spreadsheets, quick checks | Lowest (you already know this!) |
+| Parquet | ~10× faster | ~50% smaller | Data analysis at scale | Low (just change file extension) |
+| JSON-LD | Fast | Medium | Interactive visualizations, graphs | Medium (hierarchical structure) |
+
+**New to Parquet?** Think of it as "CSV optimized for computers instead of humans." You can't open it in a text editor, but Python/R load it much faster and it takes less disk space. Perfect if you're analyzing the data programmatically.
+
+**New to JSON-LD?** It's JSON (JavaScript Object Notation) with added vocabulary definitions. The data is already organized as a hierarchy (commodities contain tiers, tiers contain sectors, sectors contain scopes), so you don't need to reshape it for tree visualizations. The `@context` section tells semantic web tools how to interpret the data relationships.
 
 Open Excel files in your spreadsheet tool or start with the "Contributions_by_Name" tab for human-readable industry names.
 
@@ -62,7 +113,7 @@ Artifacts will be saved under `outputs/` and are committed to the repo so non-te
 This workflow installs packages on first run. At minimum, you'll need:
 
 - Internet access (to install packages and download model specs)
-- R packages: pacman, yaml, dplyr, reshape2, knitr, httr, openxlsx, stringr, tidyr, cli, devtools, useeior, arrow (for Parquet), jsonlite (for JSON/JSON-LD)
+- R packages: pacman, yaml, dplyr, reshape2, knitr, httr, openxlsx, stringr, tidyr, cli, devtools, useeior, arrow (for Parquet), jsonlite (for JSON-LD)
 - Pandoc only if you want to "Knit"/render a document (RStudio bundles it; otherwise install separately)
 
 The R Markdown takes care of installing `devtools`/`useeior` versions that match your selected SEF version.
@@ -74,12 +125,18 @@ Example in `config.yml`:
 ```yaml
 sef_version: "v1.3.0"
 
+# Export options for structured outputs
+export_options:
+  parquet: true   # Columnar format for data science (Python/R)
+  jsonld: true    # Hierarchical format for D3.js and knowledge graphs
+
 # List of sectors considered as Scope 2 (utilities), using USEEIO codes
 scope_2_sectors:
   - "221100/US"
 ```
 
 - `sef_version`: Supply Chain Emission Factors (SEF) release to reproduce. The script will automatically fetch the matching USEEIO model/spec and correct `useeior` package version.
+- `export_options`: Enable/disable structured output formats. Set to `false` to skip (JSON-LD generation takes ~5-10 minutes; disable if you only need Excel/CSV/Parquet).
 - `scope_2_sectors`: Sectors whose direct emissions you want treated as Scope 2. You can add more codes as needed.
 
 ## Project structure
@@ -178,12 +235,15 @@ We aim to have this workflow and its outputs peer-reviewed over the next few mon
 - Code: See `LICENSE`.
 - Data (files under `outputs/` and data attached to GitHub releases): CC BY 4.0. See `LICENSE-DATA.md` and https://creativecommons.org/licenses/by/4.0/.
 
-## Credits and acknowledgement
+## Credits and acknowledgment
 
-Huge thanks to the USEPA and Cornerstone teams and contributors whose work powers this project:
-- USEEIO package and models: https://github.com/USEPA/useeior/
-- Supply Chain Emission Factors: https://github.com/USEPA/supply-chain-factors
-- FLOWSA: https://github.com/USEPA/flowsa
+This project builds on open-source work by the U.S. EPA. Huge thanks to the USEPA and Cornerstone teams and contributors:
+
+- **USEEIO model & useeior package**: https://github.com/USEPA/useeior/ — MIT License, Copyright U.S. EPA
+- **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors — MIT License, Copyright U.S. EPA
+- **FLOWSA**: https://github.com/USEPA/flowsa
+
+Both useeior and supply-chain-factors are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
 
 Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
 

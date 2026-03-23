@@ -23,12 +23,14 @@ jobs:
           echo "Listing outputs/ at $GITHUB_REF"
           ls -la outputs || true
 
-      - name: Upload CSV and XLSX as release assets
+      - name: Upload output files as release assets
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            outputs/*.csv
             outputs/*.xlsx
+            outputs/csv/*.csv
+            outputs/parquet/*.parquet
+            outputs/jsonld/*.jsonld
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
