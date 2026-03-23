@@ -33,7 +33,7 @@ jobs:
         env:
           OWNER: DecarbNexus
           REPO: useeio_sectors_disaggregation
-          TAG: v1.0
+          TAG: v1.1
           DATA_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv
           XLSX_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.xlsx
           ELEC_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_electricity_only.csv
