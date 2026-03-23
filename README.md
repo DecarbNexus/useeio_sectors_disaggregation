@@ -235,12 +235,15 @@ We aim to have this workflow and its outputs peer-reviewed over the next few mon
 - Code: See `LICENSE`.
 - Data (files under `outputs/` and data attached to GitHub releases): CC BY 4.0. See `LICENSE-DATA.md` and https://creativecommons.org/licenses/by/4.0/.
 
-## Credits and acknowledgement
+## Credits and acknowledgment
 
-Huge thanks to the USEPA and Cornerstone teams and contributors whose work powers this project:
-- USEEIO package and models: https://github.com/USEPA/useeior/
-- Supply Chain Emission Factors: https://github.com/USEPA/supply-chain-factors
-- FLOWSA: https://github.com/USEPA/flowsa
+This project builds on open-source work by the U.S. EPA. Huge thanks to the USEPA and Cornerstone teams and contributors:
+
+- **USEEIO model & useeior package**: https://github.com/USEPA/useeior/ — MIT License, Copyright U.S. EPA
+- **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors — MIT License, Copyright U.S. EPA
+- **FLOWSA**: https://github.com/USEPA/flowsa
+
+Both useeior and supply-chain-factors are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
 
 Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
 

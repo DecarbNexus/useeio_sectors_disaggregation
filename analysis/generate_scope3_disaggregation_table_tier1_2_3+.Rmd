@@ -181,14 +181,15 @@ It's important to record the key specifications of the model used for this analy
 ```{r 02a-model-specs, echo=FALSE}
 # Extract key specifications from the model object
 model_specs <- data.frame(
-  Specification = c("USEEIO Supply Chain Emission Factors version", "Model Name", "Input-Output Model's Year", "GHG Data Year", "GHG Data File", "GHG Data File Location"),
+  Specification = c("USEEIO Supply Chain Emission Factors version", "Model Name", "Input-Output Model's Year", "GHG Data Year", "GHG Data File", "GHG Data File Location", "Model type"),
   Value = c(
     config$sef_version,
     model$specs$Model,
     model$specs$IOYear,
     model$specs$SatelliteTable$GHG$DataYears,
     model$specs$SatelliteTable$GHG$StaticFile,
-    model$specs$SatelliteTable$GHG$FileLocation
+    model$specs$SatelliteTable$GHG$FileLocation,
+    "Commodity"
   )
 )
 
@@ -780,7 +781,12 @@ author_info <- data.frame(
     "Open-source repository",
     "Q&A + Discussion",
     "Data License",
-    "License URL"
+    "License URL",
+    "",
+    "Acknowledgments",
+    "USEEIO model & useeior package",
+    "Supply Chain Emission Factors",
+    "Upstream data license"
   ),
   Value = c(
     "Damien Lieber",
@@ -790,7 +796,12 @@ author_info <- data.frame(
     "https://github.com/DecarbNexus/useeio_sectors_disaggregation",
     "https://github.com/DecarbNexus/useeio_sectors_disaggregation/discussions",
     "CC BY 4.0 (see LICENSE-DATA.md)",
-    "https://creativecommons.org/licenses/by/4.0/"
+    "https://creativecommons.org/licenses/by/4.0/",
+    "",
+    "This project builds on open-source work by the U.S. EPA (see below)",
+    "https://github.com/USEPA/useeior (MIT License, Copyright U.S. EPA)",
+    "https://github.com/USEPA/supply-chain-factors (MIT License, Copyright U.S. EPA)",
+    "Both upstream projects are released under the MIT License. See their repositories for full license text."
   ),
   stringsAsFactors = FALSE
 )
@@ -841,6 +852,12 @@ log_step("Wrote sheet: Direct requirements matrix (A)")
 addWorksheet(wb, "Leontief inverse (L)")
 writeData(wb, "Leontief inverse (L)", L_matrix, rowNames = TRUE)
 log_step("Wrote sheet: Leontief inverse (L)")
+
+addWorksheet(wb, "Total impacts from useeior (N)")
+N_export <- t(model$N)
+rownames(N_export) <- stringr::str_replace(rownames(N_export), "/US$", "")
+writeData(wb, "Total impacts from useeior (N)", N_export, rowNames = TRUE)
+log_step("Wrote sheet: Total impacts from useeior (N)")
 
   saveWorkbook(wb, excel_filename, overwrite = TRUE)
   log_step(sprintf("Saved Excel: %s", excel_filename))
@@ -994,13 +1011,19 @@ if (export_jsonld) {
     )
   
   # === LIGHTWEIGHT VERSION: Aggregated for simple viz ===
-  # Structure: commodity → tier → ghg_source (aggregated across sectors and scopes)
-  log_step("Building lightweight JSON-LD (commodity > tier > ghg_source)...")
+  # Structure: commodity → tier → sector (with name, scope, relative_contribution)
+  log_step("Building lightweight JSON-LD (commodity > tier > sector > scope)...")
   json_data_light <- final_table_by_code %>%
+    left_join(
+      industry_mapping,
+      by = c("Embedded_Sector_Code" = "Code")
+    ) %>%
     group_by(
       Disaggregated_Commodity_Code,
       Economic_Tier,
-      Embedded_Sector_Code_for_GHG_sources
+      Embedded_Sector_Code,
+      Name,
+      Scope
     ) %>%
     summarise(
       relative_contribution = sum(Relative_Contribution),
@@ -1009,15 +1032,19 @@ if (export_jsonld) {
     transmute(
       commodity_code = Disaggregated_Commodity_Code,
       tier = Economic_Tier,
-      ghg_source_code = Embedded_Sector_Code_for_GHG_sources,
+      embedded_sector_code = Embedded_Sector_Code,
+      embedded_sector_name = Name,
+      scope = Scope,
       relative_contribution = relative_contribution
     )
   
   nested_json_light <- json_data_light %>%
     group_by(commodity_code, tier) %>%
     summarise(
-      ghg_sources = list(tibble(
-        ghg_source_code = ghg_source_code,
+      sectors = list(tibble(
+        embedded_sector_code = embedded_sector_code,
+        embedded_sector_name = embedded_sector_name,
+        scope = scope,
         relative_contribution = relative_contribution
       )),
       .groups = "drop"
@@ -1026,7 +1053,7 @@ if (export_jsonld) {
     summarise(
       tiers = list(tibble(
         tier = tier,
-        ghg_sources = ghg_sources
+        sectors = sectors
       )),
       .groups = "drop"
     )
@@ -1093,17 +1120,19 @@ if (export_jsonld) {
     "scopes" = "hasScope"
   )
   
-  # Lightweight version vocabulary (aggregated, no sector/scope split)
+  # Lightweight version vocabulary (with sector name and scope)
   jsonld_context_light <- list(
     "@vocab" = "https://decarbnexus.com/vocab/useeio-disaggregation#",
     "schema" = "http://schema.org/",
     "useeio" = "https://www.epa.gov/land-research/us-environmentally-extended-input-output-useeio-technical-content#",
     "commodity_code" = list("@id" = "useeio:commodity", "@type" = "@id"),
-    "ghg_source_code" = list("@id" = "ghgSource", "@type" = "@id"),
+    "embedded_sector_code" = list("@id" = "useeio:sector", "@type" = "@id"),
+    "embedded_sector_name" = list("@id" = "sectorName", "@type" = "schema:Text"),
     "tier" = "economicTier",
+    "scope" = "ghgScope",
     "relative_contribution" = list("@id" = "relativeContribution", "@type" = "schema:Float"),
     "tiers" = "hasTier",
-    "ghg_sources" = "hasGHGSource"
+    "sectors" = "hasSector"
   )
   
   jsonld_output_full <- list(

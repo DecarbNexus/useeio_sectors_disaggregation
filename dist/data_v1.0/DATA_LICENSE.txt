@@ -1,5 +1,0 @@
-Data License: CC BY 4.0
-Full license: https://creativecommons.org/licenses/by/4.0/
-If you use these datasets, cite DecarbNexus LLC and acknowledge USEPA USEEIO/SEF sources:
- - USEEIO: https://github.com/USEPA/useeior
- - Supply Chain Emission Factors: https://github.com/USEPA/supply-chain-factors
