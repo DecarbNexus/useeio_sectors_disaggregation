@@ -20,6 +20,10 @@ BEGINNER NOTES
 ```{r setup, include=FALSE}
 # Global chunk options: hide code by default to keep the document readable.
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# Normalize working directory: when knitting directly from RStudio the default
+# working directory is the Rmd's folder (analysis/); reset to project root so
+# all relative paths (config.yml, outputs/, spec_files/, etc.) resolve correctly.
+if (basename(getwd()) == "analysis") setwd("..")
 ```
 
 ## 0. Read this first (for beginners)
