@@ -735,6 +735,22 @@ sector_classification <- model$Industries %>%
     Description
   )
 
+# Append derived electricity commodity rows
+electricity_derived_rows <- tibble::tibble(
+  `Category Code`    = "22",
+  `Category Name`    = "Utilities",
+  `Subcategory Code` = "221",
+  `Subcategory Name` = "Utilities",
+  `Sector code`      = c("221100-upstream_with_losses", "221100-upstream_without_losses"),
+  `Sector name`      = c("Electricity (upstream with losses)", "Electricity (upstream without losses)"),
+  `Commodity name`   = c("Electricity (upstream with losses)", "Electricity (upstream without losses)"),
+  Description        = c(
+    "Derived commodity: upstream GHG emissions of the electricity sector including T&D losses (all tiers/scopes except Tier 1 Scope 1 direct emissions).",
+    "Derived commodity: upstream GHG emissions of the electricity sector excluding T&D losses (Tier 2+ only)."
+  )
+)
+sector_classification <- bind_rows(sector_classification, electricity_derived_rows)
+
 log_step(sprintf("sector_classification ready (%s rows)", format(nrow(sector_classification), big.mark=",")))
 
 ```
