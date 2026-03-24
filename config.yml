@@ -30,5 +30,5 @@ export_options:
   csv_lightweight: true            # Lightweight CSV (aggregated by commodity > tier > ghg_source)
   csv_electricity_only: true       # Electricity-only filtered CSV
   csv_sector_classification: true  # Sector classification CSV
-  parquet: true                   # Fast: ~1-2 seconds (columnar format for data science)
-  jsonld: true                    # Moderate: ~5-10 minutes (hierarchical RDF-ready format for D3.js and knowledge graphs)
+  parquet: false                   # Fast: ~1-2 seconds (columnar format for data science)
+  jsonld: false                    # Moderate: ~5-10 minutes (hierarchical RDF-ready format for D3.js and knowledge graphs)
