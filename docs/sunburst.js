@@ -1,5 +1,5 @@
 // USEEIO Sector Disaggregation – Interactive Sunburst
-// - Loads slim light CSV from GitHub Release assets (fallback to same-origin bundle)
+// - Loads slim light CSV directly from GitHub Release permalink
 // - Lets user select a Disaggregated_Commodity
 // - Builds hierarchy: Tier -> SectorGroup (selectable) -> Scope with value = sum of Relative_Contribution
 
@@ -7,11 +7,9 @@
 const OWNER = "DecarbNexus";
 const REPO = "useeio_sectors_disaggregation";
 const TAG = "v1.1";
-const LIGHT_FILENAME = "SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv";
-const CLASS_FILENAME = "sector_classification.csv";
 
-const RELEASE_LIGHT_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${LIGHT_FILENAME}`;
-const RELEASE_CLASS_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${CLASS_FILENAME}`;
+const RELEASE_LIGHT_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv`;
+const RELEASE_CLASS_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/sector_classification.csv`;
 
 // dynamic sizing computed at render time
 let WIDTH = 700;
@@ -26,41 +24,19 @@ const tooltip = d3.select("#tooltip");
 const CHART_SCALE = 0.75; // 75% of previous size
 
 async function loadCSV() {
-  const candidates = [
-    // Prefer same-origin bundle (downloaded into docs/data by GitHub Actions)
-    "data/" + LIGHT_FILENAME,
-    // Then Release asset
-    RELEASE_LIGHT_URL,
-  ];
-  let lastErr;
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`fetch failed ${res.status}`);
-      const text = await res.text();
-      const data = d3.csvParse(text);
-      console.log(`Loaded main data from: ${url} (rows: ${data.length})`);
-      return data;
-    } catch (e) {
-      lastErr = e;
-      continue;
-    }
-  }
-  throw new Error("Failed to load light CSV: " + lastErr);
+  const res = await fetch(RELEASE_LIGHT_URL);
+  if (!res.ok) throw new Error(`Failed to load data: ${res.status}`);
+  const data = d3.csvParse(await res.text());
+  console.log(`Loaded main data (rows: ${data.length})`);
+  return data;
 }
 
 async function tryLoadClassification() {
-  const candidates = [
-    "data/" + CLASS_FILENAME,
-    RELEASE_CLASS_URL,
-  ];
-  let lastErr;
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`fetch failed ${res.status}`);
-      const text = await res.text();
-      const csv = d3.csvParse(text);
+  try {
+    const res = await fetch(RELEASE_CLASS_URL);
+    if (!res.ok) throw new Error(`fetch failed ${res.status}`);
+    const text = await res.text();
+    const csv = d3.csvParse(text);
 
     const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
     const findExact = (cands) =>
@@ -94,15 +70,12 @@ async function tryLoadClassification() {
         });
       }
 
-      console.log(`Loaded sector classification from: ${url} (rows: ${map.size})`);
+      console.log(`Loaded sector classification (rows: ${map.size})`);
       return { map };
-    } catch (e) {
-      lastErr = e;
-      continue;
-    }
+  } catch (e) {
+    console.warn("Classification CSV not found; defaulting to sector codes.", e);
+    return { map: new Map() };
   }
-  console.warn("Classification CSV not found via any candidate URL; defaulting to sector codes.", lastErr);
-  return { map: new Map() };
 }
 
 function getColumnsMap(columns) {
