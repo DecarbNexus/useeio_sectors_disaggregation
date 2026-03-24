@@ -249,9 +249,9 @@ Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
 
 ## Pair this with GHG source disaggregation
 
-This project focuses on disaggregating Scope 3 emissions by USEEIO sectors (and tiers). You’ll soon be able to combine it with a companion workflow that disaggregates each sector’s emissions into their underlying greenhouse gas sources:
+This project focuses on disaggregating Scope 3 emissions by USEEIO sectors (and tiers). You can combine it with a companion workflow that disaggregates each sector’s emissions into their underlying greenhouse gas sources:
 
-- Upcoming repository: https://github.com/DecarbNexus/useeio_ghg_sources_disaggregation (target publication by Thanksgiving 2025)
+- Repository: https://github.com/DecarbNexus/useeio_ghg_sources_disaggregation
 - Data foundation: It leverages USEPA’s FLOWSA (https://github.com/USEPA/flowsa), which is also a core data source for USEEIO. Pairing the two lets you go from “which sectors and tiers?” to “which GHG sources within those sectors?”
 
 GHG source disaggregation completes the DecarbNexus primary disaggregation workflow using USEEIO data, as illustrated below.
