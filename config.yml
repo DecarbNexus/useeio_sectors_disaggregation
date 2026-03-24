@@ -3,15 +3,16 @@
 # --------------------------------------------------------------------------
 # Instructions:
 # 1. Edit the 'sef_version' to the desired Supply Chain Emission Factors
-#    (SEF) table version from the USEPA repository.
+#    (SEF) table version. For v1.3.0 and older: hosted by USEPA (https://github.com/USEPA/supply-chain-factors). For v1.4.0+:
+#    hosted by Cornerstone (https://github.com/cornerstone-data/supply-chain-factors).
 # 2. Save this file and then run the 'generate_scope3_disaggregation_table_tier1_2_3+.Rmd' script.
 # --------------------------------------------------------------------------
 
 # Set the desired version of the Supply Chain Emission Factors (SEF) table.
 # The script will automatically look up the correct USEEIO model and package
 # version associated with this SEF release.
-# Example: "v1.1.1"
-sef_version: "v1.3.0"
+# Example: "v1.3.0" (USEPA/GHG2022) or "v1.4.0" (Cornerstone/GHG2023)
+sef_version: "v1.4.0"
 
 # Define the list of sectors whose direct emissions should be categorized as Scope 2.
 # These are typically utilities like electricity, steam, and heat.
@@ -29,5 +30,5 @@ export_options:
   csv_lightweight: true            # Lightweight CSV (aggregated by commodity > tier > ghg_source)
   csv_electricity_only: true       # Electricity-only filtered CSV
   csv_sector_classification: true  # Sector classification CSV
-  parquet: true                   # Fast: ~1-2 seconds (columnar format for data science)
-  jsonld: true                    # Moderate: ~5-10 minutes (hierarchical RDF-ready format for D3.js and knowledge graphs)
+  parquet: false                   # Fast: ~1-2 seconds (columnar format for data science)
+  jsonld: false                    # Moderate: ~5-10 minutes (hierarchical RDF-ready format for D3.js and knowledge graphs)
