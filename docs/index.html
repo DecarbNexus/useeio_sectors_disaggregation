@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260323-1" />
+  <link rel="stylesheet" href="styles.css?v=20260324-1" />
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   </head>
   <body>
@@ -15,11 +15,19 @@
       <h1>USEEIO Sector Disaggregation – Interactive Sunburst</h1>
       <p>
   Explore Scope 3 contributions by sector, economic tier, and scope. Data sourced from the
-  <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/releases/tag/v1.1" target="_blank" rel="noopener">v1.1 Release assets</a>.
+  <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/releases/tag/v1.2" target="_blank" rel="noopener">v1.2 Release assets</a>.
       </p>
     </header>
 
     <section class="controls">
+      <div class="control-row">
+        <label for="sefVersionSelect">Dataset version:</label>
+        <select id="sefVersionSelect">
+          <option value="v1.3">SEF v1.3 (GHG 2022, IO 2017)</option>
+          <option value="v1.4" selected>SEF v1.4 (GHG 2023, IO 2017)</option>
+        </select>
+      </div>
+
       <div class="control-row">
         <label for="commoditySelect">Commodity to disaggregate:</label>
         <input id="commoditySearch" type="search" placeholder="Type to filter commodities…" aria-label="Search commodities" />
@@ -58,15 +66,16 @@
     <footer>
       <p>
         Source code: <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation">README</a>
-        · Data: <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/releases/tag/v1.1" target="_blank" rel="noopener">Release v1.1</a>
+        · Data: <a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/releases/tag/v1.2" target="_blank" rel="noopener">Release v1.2</a>
         · Data license: <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>
         (<a href="https://github.com/DecarbNexus/useeio_sectors_disaggregation/blob/main/LICENSE-DATA.md" target="_blank" rel="noopener">details</a>)
         · Credits:
         <a href="https://github.com/USEPA/useeior/" target="_blank" rel="noopener">USEEIO</a> &
-        <a href="https://github.com/USEPA/flowsa" target="_blank" rel="noopener">FLOWSA</a>
+        <a href="https://github.com/USEPA/flowsa" target="_blank" rel="noopener">FLOWSA</a> (U.S. EPA)
+        & Cornerstone Research
       </p>
     </footer>
 
-  <script src="sunburst.js?v=20260323-1"></script>
+  <script src="sunburst.js?v=20260324-1"></script>
   </body>
   </html>
