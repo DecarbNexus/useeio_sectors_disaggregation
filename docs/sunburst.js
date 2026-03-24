@@ -12,13 +12,13 @@ const TAG = "v1.2";
 const DATASETS = {
   "v1.3": {
     label: "SEF v1.3 (GHG 2022, IO 2017)",
-    lightUrl: `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv`,
-    classUrl:  `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0_sector_classification.csv`,
+    lightUrl: "data/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv",
+    classUrl:  "data/SEF_v1.3.0_sector_classification.csv",
   },
   "v1.4": {
     label: "SEF v1.4 (GHG 2023, IO 2017)",
-    lightUrl: `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.4.0__disaggregation_factors__GHG2023_IO2017_light.csv`,
-    classUrl:  `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.4.0_sector_classification.csv`,
+    lightUrl: "data/SEF_v1.4.0__disaggregation_factors__GHG2023_IO2017_light.csv",
+    classUrl:  "data/SEF_v1.4.0_sector_classification.csv",
   },
 };
 const DEFAULT_SEF = "v1.4";

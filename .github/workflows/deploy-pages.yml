@@ -33,19 +33,15 @@ jobs:
         env:
           OWNER: DecarbNexus
           REPO: useeio_sectors_disaggregation
-          TAG: v1.0
-          DATA_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.csv
-          XLSX_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017.xlsx
-          ELEC_FILENAME: SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_electricity_only.csv
-          CLASS_FILENAME: sector_classification.csv
+          TAG: v1.2
         run: |
           set -euo pipefail
           mkdir -p docs/data
           echo "Downloading release assets ${TAG} into docs/data ..."
-          curl -L --fail -o "docs/data/${DATA_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${DATA_FILENAME}"
-          curl -L --fail -o "docs/data/${XLSX_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${XLSX_FILENAME}"
-          curl -L --fail -o "docs/data/${ELEC_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${ELEC_FILENAME}"
-          curl -L --fail -o "docs/data/${CLASS_FILENAME}" "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${CLASS_FILENAME}"
+          curl -L --fail -o "docs/data/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv"  "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv"
+          curl -L --fail -o "docs/data/SEF_v1.3.0_sector_classification.csv"                          "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0_sector_classification.csv"
+          curl -L --fail -o "docs/data/SEF_v1.4.0__disaggregation_factors__GHG2023_IO2017_light.csv"  "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.4.0__disaggregation_factors__GHG2023_IO2017_light.csv"
+          curl -L --fail -o "docs/data/SEF_v1.4.0_sector_classification.csv"                          "https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.4.0_sector_classification.csv"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
