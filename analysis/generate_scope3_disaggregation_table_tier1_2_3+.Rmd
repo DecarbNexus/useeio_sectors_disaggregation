@@ -825,7 +825,7 @@ excel_filename <- file.path(outputs_dir, paste0(file_basename, ".xlsx"))
 # CSV files in csv/ subdirectory
 csv_filename   <- file.path(csv_dir, paste0(file_basename, ".csv"))
 csv_elec_filename <- file.path(csv_dir, paste0(file_basename, "_electricity_only.csv"))
-csv_sc_filename   <- file.path(csv_dir, "sector_classification.csv")
+csv_sc_filename   <- file.path(csv_dir, paste0("SEF_",  config$sef_version,"_sector_classification.csv"))
 csv_light_filename <- file.path(csv_dir, paste0(file_basename, "_light.csv"))
 
 # Read export toggles from config (default all to TRUE if not specified)
