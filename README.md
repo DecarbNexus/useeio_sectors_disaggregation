@@ -240,25 +240,26 @@ We aim to have this workflow and its outputs peer-reviewed over the next few mon
 This project builds on open-source work by the U.S. EPA and Cornerstone. Huge thanks to the USEPA and Cornerstone teams and contributors.
 
 **SEF v1.1.1–v1.3.0 — created by the U.S. EPA:**
-- **USEEIO model & useeior package**: https://github.com/USEPA/useeior/ — MIT License, Copyright U.S. EPA
-- **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors — MIT License, Copyright U.S. EPA
+- **USEEIO model & useeior package**: https://github.com/USEPA/useeior/
+- **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors
+- **FLOWSA**: https://github.com/USEPA/flowsa
+
 
 **SEF v1.4.0+ — maintained by Cornerstone (fork of USEPA originals):**
-- **USEEIO model & useeior package**: https://github.com/cornerstone-data/useeior — MIT License
-- **Supply Chain Emission Factors**: https://github.com/cornerstone-data/supply-chain-factors — MIT License
+- **USEEIO model & useeior package**: https://github.com/cornerstone-data/useeior
+- **Supply Chain Emission Factors**: https://github.com/cornerstone-data/supply-chain-factors
+- **FLOWSA**: https://github.com/cornerstone-data/flowsa
 
-**Data foundation (all versions):**
-- **FLOWSA**: https://github.com/USEPA/flowsa
 
 All upstream projects are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
 
-Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
+Project by [DecarbNexus LLC](https://www.decarbnexus.com).
 
 ## Pair this with GHG source disaggregation
 
-This project focuses on disaggregating Scope 3 emissions by USEEIO sectors (and tiers). You’ll soon be able to combine it with a companion workflow that disaggregates each sector’s emissions into their underlying greenhouse gas sources:
+This project focuses on disaggregating Scope 3 emissions by USEEIO sectors (and tiers). You can combine it with a companion workflow that disaggregates each sector’s emissions into their underlying greenhouse gas sources:
 
-- Upcoming repository: https://github.com/DecarbNexus/useeio_ghg_sources_disaggregation (target publication by Thanksgiving 2025)
+- Repository: https://github.com/DecarbNexus/useeio_ghg_sources_disaggregation
 - Data foundation: It leverages USEPA’s FLOWSA (https://github.com/USEPA/flowsa), which is also a core data source for USEEIO. Pairing the two lets you go from “which sectors and tiers?” to “which GHG sources within those sectors?”
 
 GHG source disaggregation completes the DecarbNexus primary disaggregation workflow using USEEIO data, as illustrated below.
