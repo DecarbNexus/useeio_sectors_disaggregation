@@ -1,7 +1,23 @@
-# Maps Supply Chain Emission Factors (SEF) versions to USEEIO model spec names
+# Maps Supply Chain Emission Factors (SEF) versions to USEEIO model spec names.
 # Extend as needed by adding new key/value pairs under model_name_by_sef_version.
 # Keys must match config.yml's `sef_version` exactly.
 
 model_name_by_sef_version:
+  "v1.2":   "USEEIOv2.1.19-GHG"
+  "v1.2.3": "USEEIOv2.1.19-GHG"
   "v1.3.0": "USEEIOv2.2.22-GHG"
-  "v1.2": "USEEIOv2.1.19-GHG"
+  "v1.4.0": "USEEIOv2.6.0-phoebe-23"
+
+# Per-version overrides (all fields optional).
+#
+# useeior_org: GitHub org hosting both useeior and supply-chain-factors.
+#   Defaults to "cornerstone-data" when absent — the project's permanent home from v1.4.0 onward.
+#   Must be set to "USEPA" explicitly for v1.3.0 and older.
+sef_version_config:
+  "v1.2":
+    useeior_org: "USEPA"
+  "v1.2.3":
+    useeior_org: "USEPA"
+  "v1.3.0":
+    useeior_org: "USEPA"
+  # v1.4.0 onward uses cornerstone-data (the default); no entry needed

@@ -217,8 +217,8 @@ macOS:
 If you don’t want to install anything, you can still download the pre-built files directly from the `outputs/` folder on GitHub.
 
 ## Troubleshooting
-
-- Pandoc error while knitting: you don’t need to knit to produce outputs. Use `source("scripts/run_analysis.R")` or "Run All Chunks". If you do want to knit, install Pandoc (RStudio bundles it).
+- **Switching `sef_version` in `config.yml`**: Different SEF versions use different `useeior` package versions (and even different GitHub orgs). After changing `sef_version`, **restart R before re-running** (in RStudio: Session → Restart R; in VS Code: close the R terminal and open a new one). If you skip this, the old package stays loaded in memory and R will refuse to overwrite it, leading to errors like `"package 'useeior' is in use and will not be installed"` or HTTP 404s when the model tries to download data files.
+- Pandoc error while knitting: you don't need to knit to produce outputs. Use `source("scripts/run_analysis.R")` or "Run All Chunks". If you do want to knit, install Pandoc (RStudio bundles it).
 - If you encounter issues with Rscript or PATH: open RStudio and use the script or run chunks interactively.
 - Network/timeout errors when downloading specs: check connectivity/proxy and re-run.
 - Package install issues: try `install.packages("pacman")` in R, then re-run the script.
@@ -237,15 +237,23 @@ We aim to have this workflow and its outputs peer-reviewed over the next few mon
 
 ## Credits and acknowledgment
 
-This project builds on open-source work by the U.S. EPA. Huge thanks to the USEPA and Cornerstone teams and contributors:
+This project builds on open-source work by the U.S. EPA and Cornerstone. Huge thanks to the USEPA and Cornerstone teams and contributors.
 
-- **USEEIO model & useeior package**: https://github.com/USEPA/useeior/ — MIT License, Copyright U.S. EPA
-- **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors — MIT License, Copyright U.S. EPA
+**SEF v1.1.1–v1.3.0 — created by the U.S. EPA:**
+- **USEEIO model & useeior package**: https://github.com/USEPA/useeior/
+- **Supply Chain Emission Factors**: https://github.com/USEPA/supply-chain-factors
 - **FLOWSA**: https://github.com/USEPA/flowsa
 
-Both useeior and supply-chain-factors are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
 
-Project by Damien Lieber @ [DecarbNexus LLC](https://decarbnexus.com).
+**SEF v1.4.0+ — maintained by Cornerstone (fork of USEPA originals):**
+- **USEEIO model & useeior package**: https://github.com/cornerstone-data/useeior
+- **Supply Chain Emission Factors**: https://github.com/cornerstone-data/supply-chain-factors
+- **FLOWSA**: https://github.com/cornerstone-data/flowsa
+
+
+All upstream projects are released under the [MIT License](https://opensource.org/licenses/MIT). See their respective repositories for full license text and copyright notices.
+
+Project by [DecarbNexus LLC](https://www.decarbnexus.com).
 
 ## Pair this with GHG source disaggregation
 

@@ -1,17 +1,27 @@
 // USEEIO Sector Disaggregation – Interactive Sunburst
-// - Loads slim light CSV from GitHub Release assets (fallback to same-origin bundle)
+// - Loads slim light CSV directly from GitHub Release permalink (SEF version selectable)
 // - Lets user select a Disaggregated_Commodity
 // - Builds hierarchy: Tier -> SectorGroup (selectable) -> Scope with value = sum of Relative_Contribution
 
 // Repo / Release configuration
 const OWNER = "DecarbNexus";
 const REPO = "useeio_sectors_disaggregation";
-const TAG = "v1.1";
-const LIGHT_FILENAME = "SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv";
-const CLASS_FILENAME = "sector_classification.csv";
+const TAG = "v1.2";
 
-const RELEASE_LIGHT_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${LIGHT_FILENAME}`;
-const RELEASE_CLASS_URL = `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/${CLASS_FILENAME}`;
+// Available datasets keyed by SEF version
+const DATASETS = {
+  "v1.3": {
+    label: "SEF v1.3 (GHG 2022, IO 2017)",
+    lightUrl: `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0__disaggregation_factors__GHG2022_IO2017_light.csv`,
+    classUrl:  `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.3.0_sector_classification.csv`,
+  },
+  "v1.4": {
+    label: "SEF v1.4 (GHG 2023, IO 2017)",
+    lightUrl: `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.4.0__disaggregation_factors__GHG2023_IO2017_light.csv`,
+    classUrl:  `https://github.com/${OWNER}/${REPO}/releases/download/${TAG}/SEF_v1.4.0_sector_classification.csv`,
+  },
+};
+const DEFAULT_SEF = "v1.4";
 
 // dynamic sizing computed at render time
 let WIDTH = 700;
@@ -25,42 +35,20 @@ const tooltip = d3.select("#tooltip");
 // Simple scale factor to reduce chart size relative to the previous (too big) version
 const CHART_SCALE = 0.75; // 75% of previous size
 
-async function loadCSV() {
-  const candidates = [
-    // Prefer same-origin bundle (downloaded into docs/data by GitHub Actions)
-    "data/" + LIGHT_FILENAME,
-    // Then Release asset
-    RELEASE_LIGHT_URL,
-  ];
-  let lastErr;
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`fetch failed ${res.status}`);
-      const text = await res.text();
-      const data = d3.csvParse(text);
-      console.log(`Loaded main data from: ${url} (rows: ${data.length})`);
-      return data;
-    } catch (e) {
-      lastErr = e;
-      continue;
-    }
-  }
-  throw new Error("Failed to load light CSV: " + lastErr);
+async function loadCSV(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load data: ${res.status}`);
+  const data = d3.csvParse(await res.text());
+  console.log(`Loaded main data (rows: ${data.length})`);
+  return data;
 }
 
-async function tryLoadClassification() {
-  const candidates = [
-    "data/" + CLASS_FILENAME,
-    RELEASE_CLASS_URL,
-  ];
-  let lastErr;
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`fetch failed ${res.status}`);
-      const text = await res.text();
-      const csv = d3.csvParse(text);
+async function tryLoadClassification(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`fetch failed ${res.status}`);
+    const text = await res.text();
+    const csv = d3.csvParse(text);
 
     const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
     const findExact = (cands) =>
@@ -94,15 +82,12 @@ async function tryLoadClassification() {
         });
       }
 
-      console.log(`Loaded sector classification from: ${url} (rows: ${map.size})`);
+      console.log(`Loaded sector classification (rows: ${map.size})`);
       return { map };
-    } catch (e) {
-      lastErr = e;
-      continue;
-    }
+  } catch (e) {
+    console.warn("Classification CSV not found; defaulting to sector codes.", e);
+    return { map: new Map() };
   }
-  console.warn("Classification CSV not found via any candidate URL; defaulting to sector codes.", lastErr);
-  return { map: new Map() };
 }
 
 function getColumnsMap(columns) {
@@ -280,22 +265,38 @@ async function init() {
     legendHost.appendChild(note);
   }
 
-  const classData = await tryLoadClassification();
-  const allRows = await loadCSV();
-  const cols = getColumnsMap(allRows.columns);
+  const select = document.getElementById("commoditySelect");
+  const search = document.getElementById("commoditySearch");
+  const secondSel = document.getElementById("secondRingField");
+  const sefSel = document.getElementById("sefVersionSelect");
+
+  // Mutable dataset state — updated by loadDataset()
+  let allRows = [], cols = {}, classData = { map: new Map() }, allCommodities = [];
 
   const toName = (code) => {
     const rec = classData.map.get(code);
     return (rec && rec.commodity_name) ? rec.commodity_name : code;
   };
 
-  const uniqueCodes = Array.from(new Set(allRows.map((d) => d[cols.commodity])));
-  let commodities = uniqueCodes.map((code) => ({ code, name: toName(code) }));
-  commodities.sort((a, b) => d3.ascending(a.name, b.name));
-  const allCommodities = commodities.slice();
-
-  const select = document.getElementById("commoditySelect");
-  const search = document.getElementById("commoditySearch");
+  async function loadDataset(sefKey) {
+    const ds = DATASETS[sefKey];
+    setLoading(true);
+    [classData, allRows] = await Promise.all([
+      tryLoadClassification(ds.classUrl),
+      loadCSV(ds.lightUrl),
+    ]);
+    cols = getColumnsMap(allRows.columns);
+    const uniqueCodes = Array.from(new Set(allRows.map((d) => d[cols.commodity])));
+    allCommodities = uniqueCodes.map((code) => ({ code, name: toName(code) }));
+    allCommodities.sort((a, b) => d3.ascending(a.name, b.name));
+    for (const opt of Array.from(secondSel.options)) {
+      opt.disabled = (!classData.map || classData.map.size === 0) && opt.value !== "code";
+    }
+    if (!classData.map || classData.map.size === 0) secondSel.value = "code";
+    if (search) search.value = '';
+    populateSelect(allCommodities);
+    redraw();
+  }
   function populateSelect(items, keepValue) {
     const prev = keepValue || select.value;
     while (select.firstChild) select.removeChild(select.firstChild);
@@ -314,8 +315,6 @@ async function init() {
       select.selectedIndex = 0;
     }
   }
-
-  populateSelect(allCommodities);
 
   // Fuzzy search across name and code; prefers code exact/startsWith, then name
   const norm = (s) => (s || "").toLowerCase();
@@ -406,17 +405,9 @@ async function init() {
     });
   }
 
-  const secondSel = document.getElementById("secondRingField");
-  // Disable non-code options if classification missing
-  if (!classData.map || classData.map.size === 0) {
-    for (const opt of Array.from(secondSel.options)) {
-      if (opt.value !== "code") opt.disabled = true;
-    }
-    secondSel.value = "code";
-  }
-
   function redraw() {
     const chosen = select.value;
+    if (!chosen || !allRows.length) return;
     setLoading(true);
     const rows = allRows.filter((d) => d[cols.commodity] === chosen);
     const second = secondSel.value;
@@ -441,19 +432,17 @@ async function init() {
   select.addEventListener("change", redraw);
   secondSel.addEventListener("change", redraw);
   document.getElementById("minPct").addEventListener("change", redraw);
+  sefSel.addEventListener("change", () => loadDataset(sefSel.value));
 
-  // Initial render with first commodity and prefer names when available
-  select.selectedIndex = 0;
-  redraw();
-
-  // Optional: simple redraw on resize so width-driven size updates
+  // Resize handler
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => redraw(), 150);
   });
 
-  
+  // Initial load with default dataset
+  await loadDataset(DEFAULT_SEF);
 }
 
 init().catch((err) => {
