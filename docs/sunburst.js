@@ -35,6 +35,25 @@ const tooltip = d3.select("#tooltip");
 // Simple scale factor to reduce chart size relative to the previous (too big) version
 const CHART_SCALE = 0.75; // 75% of previous size
 
+// ── Legend / highlight state ──────────────────────────────
+let hl = { ring: [[], [], []] };   // highlighted names per ring depth (0=tier,1=group,2=scope)
+let legendSearchTerms = ['', '', ''];
+let legendRingData = [[], [], []]; // per-ring item data: [{name, value, pct}]
+let svgPathSel = null;             // D3 selection of arc <path> elements
+let rootRef = null;                // Partition root (set inside renderSunburst)
+
+const TIER_COLORS = {
+  'Economic tier 1': '#0099CC',
+  'Economic tier 2': '#9C27B0',
+  'Economic tier 3+': '#20576E',
+};
+
+const RING_META = [
+  { shortLabel: 'Inner Ring',  label: 'Economic Tier',  dotColor: '#00D9EA', placeholder: 'Search tier…'   },
+  { shortLabel: 'Middle Ring', label: 'Sector / Group', dotColor: '#eab308', placeholder: 'Search sector…' },
+  { shortLabel: 'Outer Ring',  label: 'Scope',          dotColor: '#a855f7', placeholder: 'Search scope…'  },
+];
+
 async function loadCSV(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to load data: ${res.status}`);
@@ -150,9 +169,9 @@ function renderSunburst(rootData, centerLabel, minShare) {
     .domain(["Economic tier 1", "Economic tier 2", "Economic tier 3+"])
     .range(["#0099CC", "#9C27B0", "#20576E"]);
 
-  // compute container size (width-driven) and scale down
+  // compute container size (width-driven)
   const container = document.getElementById("chart");
-  const maxW = Math.min(900, (container.clientWidth || 700));
+  const maxW = Math.min(1100, (container.clientWidth || 600));
   const size = Math.max(315, Math.floor(maxW * CHART_SCALE));
   WIDTH = size;
   RADIUS = size / 2;
@@ -241,6 +260,10 @@ function renderSunburst(rootData, centerLabel, minShare) {
     })
     .on("mouseleave", () => tooltip.style("opacity", 0));
 
+  // Capture references for legend highlight updates
+  svgPathSel = path;
+  rootRef = root;
+
   // White center disc to prevent label overlap with the first ring
   const firstRing = root.descendants().find((d) => d.depth === 1);
   const innerR = firstRing ? firstRing.y0 : RADIUS * 0.33;
@@ -252,19 +275,157 @@ function renderSunburst(rootData, centerLabel, minShare) {
   // No arc labels (per request)
 }
 
-async function init() {
-  // Insert a small license note under the legend if present
-  const legendHost = document.getElementById('legend');
-  if (legendHost && !document.getElementById('licenseNote')){
-    const note = document.createElement('div');
-    note.id = 'licenseNote';
-    note.style.fontSize = '0.85rem';
-    note.style.opacity = '0.9';
-    note.style.marginTop = '0.35rem';
-    note.innerHTML = 'Data license: <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>';
-    legendHost.appendChild(note);
+// ── Highlight helpers ─────────────────────────────────────
+
+function extractRingData(root) {
+  const total = root.value || 1;
+  const maps = [{}, {}, {}];
+  root.descendants().forEach(d => {
+    if (d.depth >= 1 && d.depth <= 3) {
+      const n = d.data.name;
+      maps[d.depth - 1][n] = (maps[d.depth - 1][n] || 0) + (d.value || 0);
+    }
+  });
+  return maps.map(m =>
+    Object.entries(m)
+      .map(([name, value]) => ({ name, value, pct: value / total }))
+      .sort((a, b) => b.value - a.value)
+  );
+}
+
+function isNodeHighlighted(d) {
+  let node = d;
+  while (node) {
+    const ri = node.depth - 1;
+    if (ri >= 0 && ri < 3 && hl.ring[ri].length > 0 && hl.ring[ri].includes(node.data.name)) return true;
+    node = node.parent;
+  }
+  return false;
+}
+
+function updateHighlights() {
+  if (!svgPathSel) return;
+  const hasAny = hl.ring.some(a => a.length > 0);
+  svgPathSel.attr('fill-opacity', d => {
+    if (!hasAny) return 0.9;
+    return isNodeHighlighted(d) ? 0.9 : 0.15;
+  });
+  refreshLegendHighlights();
+}
+
+function refreshLegendHighlights() {
+  for (let ri = 0; ri < 3; ri++) {
+    const tbody = document.querySelector(`#legend-panel-${ri} .lp-tbody`);
+    if (!tbody) continue;
+    tbody.querySelectorAll('tr[data-name]').forEach(tr => {
+      tr.classList.toggle('lp-hl', hl.ring[ri].includes(tr.dataset.name));
+    });
+  }
+}
+
+function renderLegendPanels() {
+  const container = document.getElementById('legend-panels');
+  if (!container) return;
+  container.innerHTML = '';
+  RING_META.forEach((meta, ri) => {
+    const panel = document.createElement('div');
+    panel.className = 'lp';
+    panel.id = `legend-panel-${ri}`;
+    panel.innerHTML = `
+      <div class="lp-header">
+        <div class="lp-title">
+          <span class="lp-short">${meta.shortLabel}:</span>
+          <span class="lp-name">${meta.label}</span>
+        </div>
+        <input class="lp-search" type="text" placeholder="${meta.placeholder}" value="${legendSearchTerms[ri]}" />
+      </div>
+      <div class="lp-body">
+        <table class="lp-table">
+          <thead><tr>
+            <th class="lp-th lp-th-name">${meta.label}</th>
+            <th class="lp-th lp-th-pct">%</th>
+          </tr></thead>
+          <tbody class="lp-tbody"></tbody>
+        </table>
+      </div>`;
+    container.appendChild(panel);
+    panel.querySelector('.lp-search').addEventListener('input', e => {
+      legendSearchTerms[ri] = e.target.value;
+      renderLegendRows(ri);
+    });
+    renderLegendRows(ri);
+  });
+}
+
+function renderLegendRows(ri) {
+  const panel = document.getElementById(`legend-panel-${ri}`);
+  if (!panel) return;
+  const tbody = panel.querySelector('.lp-tbody');
+  const search = legendSearchTerms[ri].toLowerCase();
+  const items = legendRingData[ri] || [];
+  const filtered = search ? items.filter(it => it.name.toLowerCase().includes(search)) : items;
+
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="2" class="lp-empty">No items</td></tr>';
+    return;
   }
 
+  filtered.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.dataset.name = item.name;
+    if (hl.ring[ri].includes(item.name)) tr.classList.add('lp-hl');
+
+    const tdName = document.createElement('td');
+    tdName.className = 'lp-td-name';
+    if (ri === 0 && TIER_COLORS[item.name]) {
+      const swatch = document.createElement('span');
+      swatch.className = 'lp-swatch';
+      swatch.style.background = TIER_COLORS[item.name];
+      tdName.appendChild(swatch);
+      tdName.appendChild(document.createTextNode(item.name));
+    } else {
+      tdName.textContent = item.name;
+    }
+
+    const tdPct = document.createElement('td');
+    tdPct.className = 'lp-td-pct';
+    tdPct.textContent = formatPct(item.pct);
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdPct);
+
+    // Click: toggle (Ctrl/Cmd = multi-select)
+    tr.addEventListener('click', e => {
+      const nm = item.name;
+      if (e.metaKey || e.ctrlKey) {
+        const idx = hl.ring[ri].indexOf(nm);
+        if (idx >= 0) hl.ring[ri].splice(idx, 1); else hl.ring[ri].push(nm);
+      } else {
+        hl.ring[ri] = (hl.ring[ri].length === 1 && hl.ring[ri][0] === nm) ? [] : [nm];
+      }
+      updateHighlights();
+    });
+
+    // Hover: temporarily dim unrelated arcs
+    tr.addEventListener('mouseenter', () => {
+      if (!svgPathSel) return;
+      svgPathSel.attr('fill-opacity', d => {
+        let node = d;
+        while (node) {
+          if (node.depth - 1 === ri && node.data.name === item.name) return 0.9;
+          node = node.parent;
+        }
+        return 0.15;
+      });
+    });
+    tr.addEventListener('mouseleave', () => updateHighlights());
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function init() {
   const select = document.getElementById("commoditySelect");
   const search = document.getElementById("commoditySearch");
   const secondSel = document.getElementById("secondRingField");
@@ -418,13 +579,21 @@ async function init() {
     const titleEl = document.getElementById("figureTitle");
     if (titleEl) titleEl.textContent = title;
 
-    // Render legend
-    renderLegend();
-
     const tree = buildHierarchy(rows, cols, classData.map, second);
     const label = `Disaggregated ${toName(chosen)} emissions`;
     const minPct = Math.max(0, (+document.getElementById("minPct").value || 0) / 100);
+
+    // Reset highlight state and update ring label before render
+    hl.ring = [[], [], []];
+    legendSearchTerms = ['', '', ''];
+    RING_META[1].label = secondLabel;
+    RING_META[1].placeholder = `Search ${secondLabel.toLowerCase()}…`;
+
     renderSunburst(tree, label, minPct);
+
+    // Build legend panels from the newly rendered hierarchy
+    legendRingData = extractRingData(rootRef);
+    renderLegendPanels();
     setLoading(false);
   }
 
@@ -449,20 +618,6 @@ init().catch((err) => {
   console.error(err);
   d3.select("#chart").append("p").text("Failed to load or render the chart.");
 });
-
-function renderLegend(){
-  const container = d3.select('#legend');
-  if (container.empty()) return;
-  container.selectAll('*').remove();
-  const items = [
-    {label:'Economic tier 1', color:'#0099CC'},
-    {label:'Economic tier 2', color:'#9C27B0'},
-    {label:'Economic tier 3+', color:'#20576E'},
-  ];
-  const sel = container.selectAll('div.item').data(items).join('div').attr('class','item');
-  sel.append('span').attr('class','swatch').style('background-color', d=>d.color);
-  sel.append('span').text(d=>d.label);
-}
 
 function setLoading(isLoading){
   const chart = d3.select('#chart');
